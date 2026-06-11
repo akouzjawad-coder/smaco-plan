@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DollarSign, Download, UserPlus, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Download, UserPlus, CircleCheck as CheckCircle2 } from 'lucide-react';
 import { Profile, WorkRecord } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload } from '../utils';
 
