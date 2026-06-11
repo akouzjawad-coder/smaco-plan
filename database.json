@@ -1,0 +1,319 @@
+{
+  "users": [
+    {
+      "id": "u-1",
+      "name": "majid",
+      "email": "sarah.boss@workspace.com",
+      "role": "boss",
+      "hourlyRate": 40,
+      "avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150",
+      "pin": "1111",
+      "permissions": {
+        "canSchedule": true,
+        "canApproveSwaps": true,
+        "canViewPayroll": true,
+        "canEditRates": true
+      }
+    },
+    {
+      "id": "u-6",
+      "name": "saad",
+      "email": "marcus.boss@workspace.com",
+      "role": "boss",
+      "hourlyRate": 42.50,
+      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150",
+      "pin": "6666",
+      "permissions": {
+        "canSchedule": true,
+        "canApproveSwaps": true,
+        "canViewPayroll": true,
+        "canEditRates": true
+      }
+    },
+    {
+      "id": "u-7",
+      "name": "tariq",
+      "email": "elena.boss@workspace.com",
+      "role": "boss",
+      "hourlyRate": 45,
+      "avatar": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150",
+      "pin": "7777",
+      "permissions": {
+        "canSchedule": true,
+        "canApproveSwaps": true,
+        "canViewPayroll": true,
+        "canEditRates": true
+      }
+    },
+    {
+      "id": "u-2",
+      "name": "Nour eddine",
+      "email": "alex.rivera@workspace.com",
+      "role": "employee",
+      "hourlyRate": 13,
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150",
+      "pin": "2222",
+      "permissions": {
+        "canSchedule": false,
+        "canApproveSwaps": false,
+        "canViewPayroll": false,
+        "canEditRates": false
+      }
+    },
+    {
+      "id": "u-3",
+      "name": "Jawhar",
+      "email": "jordan.chen@workspace.com",
+      "role": "employee",
+      "hourlyRate": 13,
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+      "pin": "3333",
+      "permissions": {
+        "canSchedule": false,
+        "canApproveSwaps": false,
+        "canViewPayroll": false,
+        "canEditRates": false
+      }
+    },
+    {
+      "id": "u-4",
+      "name": "Siif eddine",
+      "email": "taylor.vance@workspace.com",
+      "role": "employee",
+      "hourlyRate": 13,
+      "avatar": "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150",
+      "pin": "4444",
+      "permissions": {
+        "canSchedule": false,
+        "canApproveSwaps": false,
+        "canViewPayroll": false,
+        "canEditRates": false
+      }
+    },
+    {
+      "id": "u-5",
+      "name": "Youssef",
+      "email": "morgan.smith@workspace.com",
+      "role": "employee",
+      "hourlyRate": 13,
+      "avatar": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
+      "pin": "5555",
+      "permissions": {
+        "canSchedule": false,
+        "canApproveSwaps": false,
+        "canViewPayroll": false,
+        "canEditRates": false
+      }
+    },
+    {
+      "id": "u-8",
+      "name": "jawad Ait kar",
+      "email": "akouzjawad@gmail.com",
+      "role": "employee",
+      "hourlyRate": 13,
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+      "pin": "2200",
+      "permissions": {
+        "canSchedule": false,
+        "canApproveSwaps": false,
+        "canViewPayroll": false,
+        "canEditRates": false
+      }
+    }
+  ],
+  "shifts": [
+    {
+      "id": "s-1",
+      "userId": "u-2",
+      "employeeName": "Nour eddine",
+      "date": "2026-06-08",
+      "startTime": "08:00",
+      "endTime": "16:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13,
+      "note": "Opening shift, busy morning rush expected"
+    },
+    {
+      "id": "s-2",
+      "userId": "u-3",
+      "employeeName": "Jawhar",
+      "date": "2026-06-08",
+      "startTime": "12:00",
+      "endTime": "20:00",
+      "roleRequired": "Supervisor",
+      "hourlyRateAtTime": 13,
+      "note": "Mid-to-closing shift oversight"
+    },
+    {
+      "id": "s-3",
+      "userId": "u-4",
+      "employeeName": "Siif eddine",
+      "date": "2026-06-09",
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "roleRequired": "Cashier",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-4",
+      "userId": "u-5",
+      "employeeName": "Youssef",
+      "date": "2026-06-09",
+      "startTime": "14:00",
+      "endTime": "22:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-5",
+      "userId": "u-2",
+      "employeeName": "Nour eddine",
+      "date": "2026-06-10",
+      "startTime": "08:00",
+      "endTime": "16:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-6",
+      "userId": "u-3",
+      "employeeName": "Jawhar",
+      "date": "2026-06-10",
+      "startTime": "12:00",
+      "endTime": "20:00",
+      "roleRequired": "Supervisor",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-7",
+      "userId": "u-4",
+      "employeeName": "Siif eddine",
+      "date": "2026-06-11",
+      "startTime": "08:00",
+      "endTime": "16:00",
+      "roleRequired": "Cashier",
+      "hourlyRateAtTime": 13,
+      "note": "Weekly inventory count at 10 AM"
+    },
+    {
+      "id": "s-8",
+      "userId": "u-5",
+      "employeeName": "Youssef",
+      "date": "2026-06-11",
+      "startTime": "16:00",
+      "endTime": "00:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-9",
+      "userId": "u-2",
+      "employeeName": "Nour eddine",
+      "date": "2026-06-12",
+      "startTime": "08:00",
+      "endTime": "16:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-10",
+      "userId": "u-3",
+      "employeeName": "Jawhar",
+      "date": "2026-06-12",
+      "startTime": "12:00",
+      "endTime": "20:00",
+      "roleRequired": "Supervisor",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-11",
+      "userId": "u-5",
+      "employeeName": "Youssef",
+      "date": "2026-06-13",
+      "startTime": "10:00",
+      "endTime": "18:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-12",
+      "userId": "u-4",
+      "employeeName": "Siif eddine",
+      "date": "2026-06-14",
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "roleRequired": "Cashier",
+      "hourlyRateAtTime": 13
+    },
+    {
+      "id": "s-13",
+      "userId": "u-8",
+      "employeeName": "jawad Ait kar",
+      "date": "2026-06-11",
+      "startTime": "09:00",
+      "endTime": "17:00",
+      "roleRequired": "Barista",
+      "hourlyRateAtTime": 13
+    }
+  ],
+  "swapRequests": [
+    {
+      "id": "swap-1",
+      "shiftId": "s-7",
+      "requestingUserId": "u-4",
+      "requestingUserName": "Siif eddine",
+      "targetUserId": "u-2",
+      "targetUserName": "Nour eddine",
+      "status": "pending",
+      "comment": "Need off for doctor visit. Can someone take this or swap with me?",
+      "createdAt": "2026-06-10T14:30:00Z"
+    }
+  ],
+  "timeLogs": [
+    {
+      "id": "log-1",
+      "userId": "u-2",
+      "userName": "Nour eddine",
+      "date": "2026-06-08",
+      "clockIn": "2026-06-08T07:58:12Z",
+      "clockOut": "2026-06-08T16:02:45Z",
+      "regularHours": 8.08,
+      "overtimeHours": 0,
+      "totalHours": 8.08,
+      "hourlyRate": 13,
+      "wage": 105.04,
+      "isApproved": true,
+      "isPaid": false
+    },
+    {
+      "id": "log-2",
+      "userId": "u-3",
+      "userName": "Jawhar",
+      "date": "2026-06-08",
+      "clockIn": "2026-06-08T12:00:00Z",
+      "clockOut": "2026-06-08T20:05:00Z",
+      "regularHours": 8.08,
+      "overtimeHours": 0,
+      "totalHours": 8.08,
+      "hourlyRate": 13,
+      "wage": 105.04,
+      "isApproved": true,
+      "isPaid": false
+    },
+    {
+      "id": "log-3",
+      "userId": "u-4",
+      "userName": "Siif eddine",
+      "date": "2026-06-09",
+      "clockIn": "2026-06-09T08:55:00Z",
+      "clockOut": "2026-06-09T17:05:00Z",
+      "regularHours": 8.17,
+      "overtimeHours": 0,
+      "totalHours": 8.17,
+      "hourlyRate": 13,
+      "wage": 106.21,
+      "isApproved": true,
+      "isPaid": false
+    }
+  ]
+}

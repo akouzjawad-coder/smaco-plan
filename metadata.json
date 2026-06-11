@@ -1,0 +1,6 @@
+{
+  "name": "SMACO Plan",
+  "description": "Premium workforce management, shift scheduling, real-time tracking, and payment ledger for SMACO Smash Burger and Birria Tacos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
