@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2 } from 'lucide-react';
-import { Profile, WorkRecord } from '../types';
+import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus } from 'lucide-react';
+import { Profile, WorkRecord, Shift } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours } from '../utils';
 
 interface BossDashboardProps {
   profiles: Profile[];
   workRecords: WorkRecord[];
+  shifts: Shift[];
   onAddProfile: (profile: Omit<Profile, 'id'>) => Promise<void>;
   onUpdateProfile: (id: string, updates: Partial<Profile>) => Promise<void>;
   onDeleteProfile: (id: string) => Promise<void>;
@@ -15,11 +16,15 @@ interface BossDashboardProps {
   onDeleteWorkRecord: (id: string) => Promise<void>;
   onMarkAllPaidForEmployee: (userId: string) => Promise<void>;
   onUndoPaymentForEmployee: (userId: string) => Promise<void>;
+  onAddShift: (shift: Omit<Shift, 'id'>) => Promise<void>;
+  onUpdateShift: (id: string, updates: Partial<Shift>) => Promise<void>;
+  onDeleteShift: (id: string) => Promise<void>;
 }
 
 export default function BossDashboard({
   profiles,
   workRecords,
+  shifts,
   onAddProfile,
   onUpdateProfile,
   onDeleteProfile,
@@ -29,13 +34,18 @@ export default function BossDashboard({
   onDeleteWorkRecord,
   onMarkAllPaidForEmployee,
   onUndoPaymentForEmployee,
+  onAddShift,
+  onUpdateShift,
+  onDeleteShift,
 }: BossDashboardProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProfileId, setEditProfileId] = useState<string | null>(null);
   const [editRecordId, setEditRecordId] = useState<string | null>(null);
   const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ type: 'profile' | 'record'; id: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'profile' | 'record' | 'shift'; id: string } | null>(null);
   const [confirmPay, setConfirmPay] = useState<{ userId: string; unpaid: number } | null>(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [editShiftId, setEditShiftId] = useState<string | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -43,6 +53,13 @@ export default function BossDashboard({
   const [newRate, setNewRate] = useState('13');
   const [newPin, setNewPin] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Shift form state
+  const [shiftUserId, setShiftUserId] = useState('');
+  const [shiftDate, setShiftDate] = useState(new Date().toISOString().split('T')[0]);
+  const [shiftStartTime, setShiftStartTime] = useState('09:00');
+  const [shiftEndTime, setShiftEndTime] = useState('17:00');
+  const [shiftRoleLabel, setShiftRoleLabel] = useState('');
 
   const staff = profiles.filter(p => p.role === 'employee');
 
@@ -111,8 +128,10 @@ export default function BossDashboard({
     if (!confirmDelete) return;
     if (confirmDelete.type === 'profile') {
       await onDeleteProfile(confirmDelete.id);
-    } else {
+    } else if (confirmDelete.type === 'record') {
       await onDeleteWorkRecord(confirmDelete.id);
+    } else if (confirmDelete.type === 'shift') {
+      await onDeleteShift(confirmDelete.id);
     }
     setConfirmDelete(null);
   };
@@ -121,9 +140,82 @@ export default function BossDashboard({
     await onUndoPaymentForEmployee(userId);
   };
 
+  const handleAddShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      const user = profiles.find(p => p.id === shiftUserId);
+      await onAddShift({
+        user_id: shiftUserId,
+        user_name: user?.name || '',
+        shift_date: shiftDate,
+        start_time: shiftStartTime,
+        end_time: shiftEndTime,
+        role_label: shiftRoleLabel,
+      });
+      setShiftUserId('');
+      setShiftDate(new Date().toISOString().split('T')[0]);
+      setShiftStartTime('09:00');
+      setShiftEndTime('17:00');
+      setShiftRoleLabel('');
+      setShowScheduleModal(false);
+    } catch (err) {
+      console.error('Failed to add shift:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editShiftId) return;
+    setIsSubmitting(true);
+    try {
+      const user = profiles.find(p => p.id === shiftUserId);
+      await onUpdateShift(editShiftId, {
+        user_id: shiftUserId,
+        user_name: user?.name || '',
+        shift_date: shiftDate,
+        start_time: shiftStartTime,
+        end_time: shiftEndTime,
+        role_label: shiftRoleLabel,
+      });
+      setEditShiftId(null);
+      setShiftUserId('');
+      setShiftDate(new Date().toISOString().split('T')[0]);
+      setShiftStartTime('09:00');
+      setShiftEndTime('17:00');
+      setShiftRoleLabel('');
+    } catch (err) {
+      console.error('Failed to update shift:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const profile = editProfileId ? profiles.find(p => p.id === editProfileId) : null;
   const record = editRecordId ? workRecords.find(r => r.id === editRecordId) : null;
   const viewEmployee = viewEmployeeId ? employeeData.find(e => e.id === viewEmployeeId) : null;
+  const editShift = editShiftId ? shifts.find(s => s.id === editShiftId) : null;
+
+  // Get week dates for schedule planner
+  const getWeekDates = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+
+  const weekDates = getWeekDates();
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div className="space-y-5">
@@ -187,7 +279,6 @@ export default function BossDashboard({
                     </button>
                   </div>
 
-                  {/* Quick Actions */}
                   <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-800">
                     {emp.hasAnyUnpaidApproved && emp.unpaidEarnings > 0 && (
                       <button
@@ -211,6 +302,93 @@ export default function BossDashboard({
             ))}
           </div>
         )}
+      </div>
+
+      {/* Weekly Schedule Planner */}
+      <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
+        <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white font-display">Weekly Schedule</h3>
+          <button
+            onClick={() => {
+              setShiftUserId('');
+              setShiftDate(new Date().toISOString().split('T')[0]);
+              setShiftStartTime('09:00');
+              setShiftEndTime('17:00');
+              setShiftRoleLabel('');
+              setShowScheduleModal(true);
+            }}
+            className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1"
+          >
+            <Plus className="w-3 h-3" /> Add Shift
+          </button>
+        </div>
+
+        <div className="divide-y divide-zinc-800/80">
+          {weekDates.map((date, idx) => {
+            const dayShifts = shifts.filter(s => s.shift_date === date);
+            const today = new Date().toISOString().split('T')[0] === date;
+
+            return (
+              <div key={date} className={`p-3 ${today ? 'bg-orange-950/10' : ''}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold ${today ? 'text-orange-400' : 'text-zinc-400'}`}>{dayNames[idx]}</span>
+                    <span className={`text-[10px] ${today ? 'text-orange-300' : 'text-zinc-500'}`}>
+                      {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                  {today && <span className="text-[9px] text-orange-400 bg-orange-950/30 px-2 py-0.5 rounded-full font-bold">Today</span>}
+                </div>
+
+                {dayShifts.length === 0 ? (
+                  <p className="text-[10px] text-zinc-600 italic">No shifts</p>
+                ) : (
+                  <div className="space-y-1">
+                    {dayShifts.map(shift => (
+                      <div key={shift.id} className="bg-slate-950 rounded-lg p-2 border border-zinc-800 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={profiles.find(p => p.id === shift.user_id)?.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                            alt={shift.user_name}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                          <div>
+                            <p className="text-[10px] font-bold text-white">{shift.user_name}</p>
+                            <p className="text-[9px] text-zinc-400 font-mono">{shift.start_time} - {shift.end_time}</p>
+                          </div>
+                          {shift.role_label && (
+                            <span className="text-[9px] text-orange-400 bg-orange-950/30 px-1.5 py-0.5 rounded">{shift.role_label}</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setEditShiftId(shift.id);
+                              setShiftUserId(shift.user_id);
+                              setShiftDate(shift.shift_date);
+                              setShiftStartTime(shift.start_time);
+                              setShiftEndTime(shift.end_time);
+                              setShiftRoleLabel(shift.role_label);
+                            }}
+                            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white cursor-pointer"
+                          >
+                            <Pencil className="w-2.5 h-2.5" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete({ type: 'shift', id: shift.id })}
+                            className="p-1 rounded bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 cursor-pointer"
+                          >
+                            <Trash2 className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Staff Management */}
@@ -568,6 +746,79 @@ export default function BossDashboard({
         </div>
       )}
 
+      {/* Add/Edit Shift Modal */}
+      {(showScheduleModal || editShiftId) && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-sm p-4 shadow-2xl border border-zinc-800">
+            <h3 className="text-sm font-bold text-white mb-3 font-display">{editShiftId ? 'Edit Shift' : 'Add Shift'}</h3>
+            <form onSubmit={editShiftId ? handleUpdateShift : handleAddShift} className="space-y-3">
+              <select
+                required
+                value={shiftUserId}
+                onChange={(e) => setShiftUserId(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white cursor-pointer"
+              >
+                <option value="">Select Employee *</option>
+                {staff.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                required
+                value={shiftDate}
+                onChange={(e) => setShiftDate(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="time"
+                  required
+                  value={shiftStartTime}
+                  onChange={(e) => setShiftStartTime(e.target.value)}
+                  className="text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white"
+                  placeholder="Start"
+                />
+                <input
+                  type="time"
+                  required
+                  value={shiftEndTime}
+                  onChange={(e) => setShiftEndTime(e.target.value)}
+                  className="text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white"
+                  placeholder="End"
+                />
+              </div>
+              <input
+                type="text"
+                value={shiftRoleLabel}
+                onChange={(e) => setShiftRoleLabel(e.target.value)}
+                className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white"
+                placeholder="Role (e.g. Kitchen, Front of House)"
+              />
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScheduleModal(false);
+                    setEditShiftId(null);
+                  }}
+                  className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 text-xs text-white bg-orange-600 py-2 rounded-lg cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Confirm Delete Modal */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -575,7 +826,7 @@ export default function BossDashboard({
             <div className="w-12 h-12 rounded-full bg-rose-950/50 border border-rose-900/50 flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6 text-rose-500" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">Delete {confirmDelete.type === 'profile' ? 'Staff' : 'Record'}?</h3>
+            <h3 className="text-sm font-bold text-white mb-1">Delete?</h3>
             <p className="text-[11px] text-zinc-400 mb-4">This cannot be undone.</p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>

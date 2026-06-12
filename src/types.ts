@@ -24,3 +24,13 @@ export interface WorkRecord {
   is_paid: boolean;
   is_approved: boolean;
 }
+
+export interface Shift {
+  id: string;
+  user_id: string;
+  user_name: string;
+  shift_date: string;
+  start_time: string;
+  end_time: string;
+  role_label: string;
+}

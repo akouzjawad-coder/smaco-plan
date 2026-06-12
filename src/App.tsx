@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-import { Profile, WorkRecord } from './types';
+import { Profile, WorkRecord, Shift } from './types';
 import BossDashboard from './components/BossDashboard';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import PinLogin from './components/PinLogin';
@@ -13,6 +13,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRealMobile, setIsRealMobile] = useState(false);
@@ -52,8 +53,16 @@ export default function App() {
 
       if (recordsError) throw recordsError;
 
+      const { data: shiftsData, error: shiftsError } = await supabase
+        .from('shifts')
+        .select('*')
+        .order('shift_date', { ascending: true });
+
+      if (shiftsError) throw shiftsError;
+
       setProfiles(profilesData || []);
       setWorkRecords(recordsData || []);
+      setShifts(shiftsData || []);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -148,6 +157,26 @@ export default function App() {
     setWorkRecords(prev => prev.map(r => ids.includes(r.id) ? { ...r, is_paid: false } : r));
   };
 
+  // Shift management
+  const addShift = async (shift: Omit<Shift, 'id'>) => {
+    const { data, error } = await supabase.from('shifts').insert([shift]).select().single();
+    if (error) throw error;
+    setShifts(prev => [...prev, data].sort((a, b) => a.shift_date.localeCompare(b.shift_date)));
+    return data;
+  };
+
+  const updateShift = async (id: string, updates: Partial<Shift>) => {
+    const { error } = await supabase.from('shifts').update(updates).eq('id', id);
+    if (error) throw error;
+    setShifts(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteShift = async (id: string) => {
+    const { error } = await supabase.from('shifts').delete().eq('id', id);
+    if (error) throw error;
+    setShifts(prev => prev.filter(s => s.id !== id));
+  };
+
   const activeUser = currentUser ? profiles.find(p => p.id === currentUser.id) || currentUser : null;
 
   if (isLoading) {
@@ -235,6 +264,7 @@ export default function App() {
                     <BossDashboard
                       profiles={profiles}
                       workRecords={workRecords}
+                      shifts={shifts}
                       onAddProfile={addProfile}
                       onUpdateProfile={updateProfile}
                       onDeleteProfile={deleteProfile}
@@ -244,11 +274,16 @@ export default function App() {
                       onDeleteWorkRecord={deleteWorkRecord}
                       onMarkAllPaidForEmployee={markAllPaidForEmployee}
                       onUndoPaymentForEmployee={undoPaymentForEmployee}
+                      onAddShift={addShift}
+                      onUpdateShift={updateShift}
+                      onDeleteShift={deleteShift}
                     />
                   ) : (
                     <EmployeeDashboard
                       currentUser={activeUser!}
                       workRecords={workRecords}
+                      shifts={shifts}
+                      allProfiles={profiles}
                       onAddRecord={addWorkRecord}
                     />
                   )}
