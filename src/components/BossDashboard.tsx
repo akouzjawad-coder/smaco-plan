@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2 } from 'lucide-react';
 import { Profile, WorkRecord } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours } from '../utils';
 
@@ -13,6 +13,8 @@ interface BossDashboardProps {
   onToggleApproved: (id: string, isApproved: boolean) => Promise<void>;
   onUpdateWorkRecord: (id: string, updates: Partial<WorkRecord>) => Promise<void>;
   onDeleteWorkRecord: (id: string) => Promise<void>;
+  onMarkAllPaidForEmployee: (userId: string) => Promise<void>;
+  onUndoPaymentForEmployee: (userId: string) => Promise<void>;
 }
 
 export default function BossDashboard({
@@ -25,12 +27,15 @@ export default function BossDashboard({
   onToggleApproved,
   onUpdateWorkRecord,
   onDeleteWorkRecord,
+  onMarkAllPaidForEmployee,
+  onUndoPaymentForEmployee,
 }: BossDashboardProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProfileId, setEditProfileId] = useState<string | null>(null);
   const [editRecordId, setEditRecordId] = useState<string | null>(null);
+  const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'profile' | 'record'; id: string } | null>(null);
-  const [confirmPaid, setConfirmPaid] = useState<{ id: string; action: 'pay' | 'unpay' } | null>(null);
+  const [confirmPay, setConfirmPay] = useState<{ userId: string; unpaid: number } | null>(null);
 
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -39,16 +44,32 @@ export default function BossDashboard({
   const [newPin, setNewPin] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const employees = profiles.filter(p => p.role === 'employee');
+  const staff = profiles.filter(p => p.role === 'employee');
 
-  // Only count APPROVED and UNPAID records for payroll
-  const approvedUnpaidRecords = workRecords.filter(r => r.is_approved && !r.is_paid);
-  const unpaidPayroll = approvedUnpaidRecords.reduce((sum, r) => sum + r.earnings, 0);
-  const unpaidHours = approvedUnpaidRecords.reduce((sum, r) => sum + r.total_hours, 0);
+  // Calculate totals - only UNPAID APPROVED records
+  const totalUnpaidHours = workRecords.filter(r => r.is_approved && !r.is_paid).reduce((sum, r) => sum + r.total_hours, 0);
+  const totalUnpaidPayroll = workRecords.filter(r => r.is_approved && !r.is_paid).reduce((sum, r) => sum + r.earnings, 0);
 
-  // Total approved hours (paid + unpaid)
-  const totalApprovedHours = workRecords.filter(r => r.is_approved).reduce((sum, r) => sum + r.total_hours, 0);
-  const totalPaid = workRecords.filter(r => r.is_approved && r.is_paid).reduce((sum, r) => sum + r.earnings, 0);
+  // Get employee data with unpaid records
+  const getEmployeeData = () => {
+    return staff.map(employee => {
+      const records = workRecords.filter(r => r.user_id === employee.id);
+      const unpaidRecords = records.filter(r => !r.is_paid);
+      const unpaidHours = unpaidRecords.reduce((sum, r) => sum + r.total_hours, 0);
+      const unpaidEarnings = unpaidRecords.reduce((sum, r) => sum + r.earnings, 0);
+      const hasAnyUnpaidApproved = unpaidRecords.some(r => r.is_approved);
+      return {
+        ...employee,
+        records,
+        unpaidRecords,
+        unpaidHours,
+        unpaidEarnings,
+        hasAnyUnpaidApproved,
+      };
+    }).filter(e => e.records.length > 0 || e.unpaidEarnings > 0);
+  };
+
+  const employeeData = getEmployeeData();
 
   const handleDownload = () => {
     const csv = exportToPayrollCSV(workRecords.filter(r => r.is_approved));
@@ -80,10 +101,10 @@ export default function BossDashboard({
     }
   };
 
-  const handleConfirmPaid = async () => {
-    if (!confirmPaid) return;
-    await onTogglePaid(confirmPaid.id, confirmPaid.action === 'pay');
-    setConfirmPaid(null);
+  const handleConfirmPay = async () => {
+    if (!confirmPay) return;
+    await onMarkAllPaidForEmployee(confirmPay.userId);
+    setConfirmPay(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -96,37 +117,36 @@ export default function BossDashboard({
     setConfirmDelete(null);
   };
 
+  const handleUndoPayment = async (userId: string) => {
+    await onUndoPaymentForEmployee(userId);
+  };
+
   const profile = editProfileId ? profiles.find(p => p.id === editProfileId) : null;
   const record = editRecordId ? workRecords.find(r => r.id === editRecordId) : null;
+  const viewEmployee = viewEmployeeId ? employeeData.find(e => e.id === viewEmployeeId) : null;
 
   return (
     <div className="space-y-5">
-      {/* Payroll Summary */}
+      {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-4">
           <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Staff</p>
-          <p className="text-xl font-bold text-white mt-1 font-display">{profiles.length}</p>
+          <p className="text-xl font-bold text-white mt-1 font-display">{staff.length}</p>
         </div>
         <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-4">
-          <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Total Hours</p>
-          <p className="text-xl font-bold text-white mt-1 font-display">{formatHoursDecimal(totalApprovedHours)}</p>
+          <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Unpaid Hours</p>
+          <p className="text-xl font-bold text-white mt-1 font-display">{formatHoursDecimal(totalUnpaidHours)}</p>
         </div>
         <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-4">
-          <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Paid Out</p>
-          <p className="text-xl font-bold text-emerald-400 mt-1 font-display">{formatCurrency(totalPaid)}</p>
+          <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Unpaid Payroll</p>
+          <p className="text-xl font-bold text-orange-400 mt-1 font-display">{formatCurrency(totalUnpaidPayroll)}</p>
         </div>
       </div>
 
-      {/* Unpaid Payroll Alert */}
-      <div className={`rounded-2xl border p-4 ${unpaidPayroll > 0 ? 'bg-amber-950/30 border-amber-900/40' : 'bg-slate-900 border-zinc-800/80'}`}>
+      {/* Employee Cards */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-zinc-400">Unpaid Payroll</p>
-            <p className="text-lg font-bold text-white font-mono mt-0.5">{formatCurrency(unpaidPayroll)}</p>
-            {unpaidHours > 0 && (
-              <p className="text-[10px] text-zinc-500">{formatHoursDecimal(unpaidHours)} unpaid hours</p>
-            )}
-          </div>
+          <h3 className="text-sm font-bold text-white font-display">Staff Records</h3>
           <button
             onClick={handleDownload}
             className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1"
@@ -134,12 +154,69 @@ export default function BossDashboard({
             <Download className="w-3 h-3" /> CSV
           </button>
         </div>
+
+        {employeeData.length === 0 ? (
+          <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-6 text-center text-xs text-slate-400">
+            No staff records yet. Add staff and have them submit work records.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {employeeData.map(emp => (
+              <div key={emp.id} className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
+                <div className="p-4">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={emp.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                      alt={emp.name}
+                      className="h-10 w-10 rounded-full object-cover border border-zinc-800"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{emp.name}</p>
+                      <p className="text-[10px] text-zinc-400">{formatCurrency(emp.hourly_rate)}/hr</p>
+                    </div>
+                    <div className="text-right flex-shrink-0 mr-2">
+                      <p className="text-[10px] text-zinc-400">{formatHoursDecimal(emp.unpaidHours)}</p>
+                      <p className="text-xs font-bold text-orange-400">{formatCurrency(emp.unpaidEarnings)}</p>
+                    </div>
+                    <button
+                      onClick={() => setViewEmployeeId(emp.id)}
+                      className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all"
+                      title="View records"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-800">
+                    {emp.hasAnyUnpaidApproved && emp.unpaidEarnings > 0 && (
+                      <button
+                        onClick={() => setConfirmPay({ userId: emp.id, unpaid: emp.unpaidEarnings })}
+                        className="flex-1 text-[10px] font-bold py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition-all cursor-pointer"
+                      >
+                        Mark All Paid ({formatCurrency(emp.unpaidEarnings)})
+                      </button>
+                    )}
+                    {emp.records.some(r => r.is_paid) && (
+                      <button
+                        onClick={() => handleUndoPayment(emp.id)}
+                        className="flex-1 text-[10px] font-bold py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-zinc-300 transition-all cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        <Undo2 className="w-3 h-3" /> Undo Payment
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Staff Profiles */}
+      {/* Staff Management */}
       <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
         <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white font-display">Staff Profiles</h3>
+          <h3 className="text-sm font-bold text-white font-display">Staff Management</h3>
           <button
             onClick={() => setShowAddModal(true)}
             className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1"
@@ -149,69 +226,79 @@ export default function BossDashboard({
         </div>
 
         <div className="divide-y divide-zinc-800/80">
-          {profiles.map(p => {
-            const profileRecords = workRecords.filter(r => r.user_id === p.id && r.is_approved);
-            const profileUnpaid = profileRecords.filter(r => !r.is_paid).reduce((sum, r) => sum + r.earnings, 0);
-
-            return (
-              <div key={p.id} className="p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <img
-                      src={p.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
-                      alt={p.name}
-                      className="h-8 w-8 rounded-full object-cover border border-zinc-800"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{p.name}</p>
-                      <p className="text-[10px] text-zinc-400">
-                        {p.role === 'boss' ? 'Manager' : 'Staff'} · {formatCurrency(p.hourly_rate)}/hr · PIN: {p.pin}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {profileUnpaid > 0 && p.role === 'employee' && (
-                      <span className="text-[9px] text-amber-400 font-medium">{formatCurrency(profileUnpaid)}</span>
-                    )}
-                    <button
-                      onClick={() => setEditProfileId(p.id)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
-                      title="Edit"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete({ type: 'profile', id: p.id })}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+          {profiles.map(p => (
+            <div key={p.id} className="p-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <img
+                  src={p.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                  alt={p.name}
+                  className="h-8 w-8 rounded-full object-cover border border-zinc-800"
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{p.name}</p>
+                  <p className="text-[10px] text-zinc-400">{p.role === 'boss' ? 'Manager' : 'Staff'}</p>
                 </div>
               </div>
-            );
-          })}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setEditProfileId(p.id)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => setConfirmDelete({ type: 'profile', id: p.id })}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Work Records */}
-      <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950">
-          <h3 className="text-sm font-bold text-white font-display">Work Records</h3>
-          <p className="text-[10px] text-slate-400">Approve, edit, and pay hours</p>
-        </div>
+      {/* View Employee Records Modal */}
+      {viewEmployeeId && viewEmployee && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[80vh] overflow-hidden shadow-2xl border border-zinc-800 flex flex-col">
+            <div className="p-4 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <img
+                  src={viewEmployee.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                  alt={viewEmployee.name}
+                  className="h-10 w-10 rounded-full object-cover border border-zinc-800"
+                />
+                <div>
+                  <h3 className="text-sm font-bold text-white font-display">{viewEmployee.name}</h3>
+                  <p className="text-[10px] text-zinc-400">{formatHoursDecimal(viewEmployee.unpaidHours)} unpaid · {formatCurrency(viewEmployee.unpaidEarnings)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewEmployeeId(null)}
+                className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-        {workRecords.length === 0 ? (
-          <div className="p-6 text-center text-xs text-slate-400">No work records submitted yet.</div>
-        ) : (
-          <div className="divide-y divide-zinc-800/80">
-            {workRecords.map(r => (
-              <div key={r.id} className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-bold text-white">{r.user_name}</p>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {viewEmployee.records.length === 0 ? (
+                <p className="text-center text-xs text-slate-400 py-4">No records</p>
+              ) : (
+                viewEmployee.records.map(r => (
+                  <div key={r.id} className="bg-slate-950 rounded-xl border border-zinc-800 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white">{formatHumanDate(r.work_date)}</p>
+                        <p className="text-[10px] text-zinc-400 font-mono">{r.start_time} - {r.end_time}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs font-bold text-white">{formatHoursDecimal(r.total_hours)}</p>
+                        <p className="text-[11px] text-orange-400 font-bold">{formatCurrency(r.earnings)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between mt-2">
                       <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${
                         r.is_paid ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40' :
                         r.is_approved ? 'bg-amber-950/40 text-amber-400 border border-amber-900/40' :
@@ -219,67 +306,58 @@ export default function BossDashboard({
                       }`}>
                         {r.is_paid ? 'Paid' : r.is_approved ? 'Approved' : 'Pending'}
                       </span>
+                      <div className="flex items-center gap-1">
+                        {!r.is_approved && (
+                          <button
+                            onClick={() => onToggleApproved(r.id, true)}
+                            className="text-[9px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white cursor-pointer"
+                          >
+                            Approve
+                          </button>
+                        )}
+                        {!r.is_paid && r.is_approved && (
+                          <button
+                            onClick={() => onTogglePaid(r.id, true)}
+                            className="text-[9px] font-bold px-2 py-1 rounded bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
+                          >
+                            Pay
+                          </button>
+                        )}
+                        {r.is_paid && (
+                          <button
+                            onClick={() => onTogglePaid(r.id, false)}
+                            className="text-[9px] font-bold px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-zinc-300 cursor-pointer"
+                          >
+                            Unpay
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setEditRecordId(r.id)}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ type: 'record', id: r.id })}
+                          className="p-1 rounded bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">
-                      {formatHumanDate(r.work_date)} · {r.start_time} - {r.end_time} · {formatHoursDecimal(r.total_hours)}
-                    </p>
-                    {r.notes && <p className="text-[9px] text-zinc-500 italic truncate mt-0.5">"{r.notes}"</p>}
                   </div>
-                  <p className="text-xs font-bold text-orange-400">{formatCurrency(r.earnings)}</p>
-                </div>
-                <div className="flex items-center justify-between mt-2">
-                  <div className="flex items-center gap-1.5">
-                    {!r.is_approved ? (
-                      <button
-                        onClick={() => onToggleApproved(r.id, true)}
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white cursor-pointer transition-all"
-                      >
-                        Approve
-                      </button>
-                    ) : !r.is_paid ? (
-                      <button
-                        onClick={() => setConfirmPaid({ id: r.id, action: 'pay' })}
-                        className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white cursor-pointer transition-all"
-                      >
-                        Mark Paid
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setConfirmPaid({ id: r.id, action: 'unpay' })}
-                        className="text-[9px] font-bold px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-zinc-300 cursor-pointer transition-all"
-                      >
-                        Undo Paid
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditRecordId(r.id)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all cursor-pointer"
-                      title="Edit"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete({ type: 'record', id: r.id })}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
-                      title="Delete"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Add Profile Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl w-full max-w-sm p-4 shadow-2xl border border-zinc-800">
-            <h3 className="text-sm font-bold text-white mb-3 font-display">Add Staff Profile</h3>
+            <h3 className="text-sm font-bold text-white mb-3 font-display">Add Staff</h3>
             <form onSubmit={handleAddProfile} className="space-y-3">
               <input
                 type="text"
@@ -337,7 +415,36 @@ export default function BossDashboard({
       {editProfileId && profile && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl w-full max-w-sm p-4 shadow-2xl border border-zinc-800">
-            <h3 className="text-sm font-bold text-white mb-3 font-display">Edit Profile</h3>
+            <div className="flex items-center justify-center mb-4">
+              <div className="relative group cursor-pointer">
+                <img
+                  src={profile.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                  alt={profile.name}
+                  className="h-16 w-16 rounded-full object-cover border-2 border-orange-500/30"
+                  onClick={() => document.getElementById('edit-avatar-input')?.click()}
+                />
+                <div className="absolute inset-0 rounded-full bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Pencil className="w-4 h-4 text-white" />
+                </div>
+                <input
+                  id="edit-avatar-input"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        onUpdateProfile(editProfileId, { avatar: reader.result as string });
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <h3 className="text-sm font-bold text-white mb-3 font-display text-center">Edit Profile</h3>
             <form onSubmit={async (e) => {
               e.preventDefault();
               const form = e.currentTarget;
@@ -357,14 +464,12 @@ export default function BossDashboard({
                 required
                 defaultValue={profile.name}
                 className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 focus:outline-none focus:border-orange-500 text-white"
-                placeholder="Name *"
               />
               <input
                 type="text"
                 name="phone"
                 defaultValue={profile.phone}
                 className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 focus:outline-none focus:border-orange-500 text-white"
-                placeholder="Phone"
               />
               <div className="grid grid-cols-3 gap-2">
                 <select
@@ -381,7 +486,6 @@ export default function BossDashboard({
                   step="0.5"
                   defaultValue={profile.hourly_rate}
                   className="text-xs px-2 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white font-mono"
-                  placeholder="€/hr"
                 />
                 <input
                   type="text"
@@ -389,7 +493,6 @@ export default function BossDashboard({
                   maxLength={4}
                   defaultValue={profile.pin}
                   className="text-xs px-2 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white font-mono"
-                  placeholder="PIN"
                 />
               </div>
               <div className="flex gap-2 pt-1">
@@ -405,7 +508,7 @@ export default function BossDashboard({
       {editRecordId && record && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl w-full max-w-sm p-4 shadow-2xl border border-zinc-800">
-            <h3 className="text-sm font-bold text-white mb-3 font-display">Edit Work Record</h3>
+            <h3 className="text-sm font-bold text-white mb-3 font-display">Edit Record</h3>
             <form onSubmit={async (e) => {
               e.preventDefault();
               const form = e.currentTarget;
@@ -456,9 +559,6 @@ export default function BossDashboard({
                 className="w-full text-xs px-3 py-2 rounded-lg border border-zinc-800 bg-slate-950 text-white"
                 placeholder="Notes"
               />
-              <div className="bg-slate-950 rounded-lg p-2 text-[10px]">
-                <p className="text-zinc-400">Hourly rate: {formatCurrency(record.hourly_rate)}/hr</p>
-              </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setEditRecordId(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>
                 <button type="submit" className="flex-1 text-xs text-white bg-orange-600 py-2 rounded-lg cursor-pointer">Save</button>
@@ -475,10 +575,8 @@ export default function BossDashboard({
             <div className="w-12 h-12 rounded-full bg-rose-950/50 border border-rose-900/50 flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6 text-rose-500" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">Confirm Delete</h3>
-            <p className="text-[11px] text-zinc-400 mb-4">
-              Delete this {confirmDelete.type}? This cannot be undone.
-            </p>
+            <h3 className="text-sm font-bold text-white mb-1">Delete {confirmDelete.type === 'profile' ? 'Staff' : 'Record'}?</h3>
+            <p className="text-[11px] text-zinc-400 mb-4">This cannot be undone.</p>
             <div className="flex gap-2">
               <button onClick={() => setConfirmDelete(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>
               <button onClick={handleConfirmDelete} className="flex-1 text-xs text-white bg-rose-600 py-2 rounded-lg cursor-pointer">Delete</button>
@@ -487,30 +585,20 @@ export default function BossDashboard({
         </div>
       )}
 
-      {/* Confirm Paid/Unpaid Modal */}
-      {confirmPaid && (
+      {/* Confirm Pay Modal */}
+      {confirmPay && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 rounded-2xl w-full max-w-xs p-4 shadow-2xl border border-zinc-800 text-center">
             <div className="w-12 h-12 rounded-full bg-amber-950/50 border border-amber-900/50 flex items-center justify-center mx-auto mb-3">
-              {confirmPaid.action === 'pay' ? (
-                <CircleCheck className="w-6 h-6 text-amber-500" />
-              ) : (
-                <X className="w-6 h-6 text-amber-500" />
-              )}
+              <CircleCheck className="w-6 h-6 text-amber-500" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">
-              {confirmPaid.action === 'pay' ? 'Mark as Paid' : 'Undo Paid'}
-            </h3>
+            <h3 className="text-sm font-bold text-white mb-1">Mark All as Paid?</h3>
             <p className="text-[11px] text-zinc-400 mb-4">
-              {confirmPaid.action === 'pay'
-                ? 'Mark this record as paid? It will move to paid history.'
-                : 'Mark this record as unpaid? It will return to unpaid payroll.'}
+              Pay {formatCurrency(confirmPay.unpaid)} for all unpaid approved records.
             </p>
             <div className="flex gap-2">
-              <button onClick={() => setConfirmPaid(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>
-              <button onClick={handleConfirmPaid} className="flex-1 text-xs text-white bg-orange-600 py-2 rounded-lg cursor-pointer">
-                {confirmPaid.action === 'pay' ? 'Mark Paid' : 'Undo Paid'}
-              </button>
+              <button onClick={() => setConfirmPay(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>
+              <button onClick={handleConfirmPay} className="flex-1 text-xs text-white bg-orange-600 py-2 rounded-lg cursor-pointer">Pay Now</button>
             </div>
           </div>
         </div>

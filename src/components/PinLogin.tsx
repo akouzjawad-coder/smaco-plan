@@ -60,7 +60,6 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
       </div>
 
       {!selectedUser ? (
-        /* User Selection */
         <div className="flex-grow flex flex-col justify-start px-5 pb-6 space-y-5 overflow-y-auto">
           <div className="grid grid-cols-2 bg-slate-900 p-1 rounded-2xl border border-slate-800/80">
             <button
@@ -111,7 +110,7 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
                           {user.name}
                         </span>
                         <span className="text-[9px] text-slate-500 font-mono block mt-0.5">
-                          {user.role === 'boss' ? 'Manager' : 'Staff'} {user.role === 'employee' && `· ${user.hourly_rate}/hr`}
+                          {user.role === 'boss' ? 'Manager' : 'Staff'}
                         </span>
                       </div>
                     </div>
@@ -125,7 +124,6 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
           </div>
         </div>
       ) : (
-        /* PIN Entry */
         <div className="flex-grow flex flex-col justify-between px-6 pb-6">
           <div className="flex flex-col items-center space-y-4 pt-1">
             <button
@@ -183,7 +181,6 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
             </div>
           </div>
 
-          {/* Keypad */}
           <div className="mx-auto w-full max-w-[270px] grid grid-cols-3 gap-y-3.5 gap-x-4 justify-items-center py-2.5">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
               <button

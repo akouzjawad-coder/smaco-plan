@@ -52,22 +52,7 @@ export default function App() {
 
       if (recordsError) throw recordsError;
 
-      if (profilesData && profilesData.length === 0) {
-        const defaultProfiles: Omit<Profile, 'id'>[] = [
-          { name: 'Manager', phone: '+49 170 0000000', role: 'boss', hourly_rate: 25, pin: '1111', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150' },
-          { name: 'Employee 1', phone: '+49 170 1111111', role: 'employee', hourly_rate: 13, pin: '2222', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150' },
-          { name: 'Employee 2', phone: '+49 170 2222222', role: 'employee', hourly_rate: 13, pin: '3333', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
-          { name: 'Employee 3', phone: '+49 170 3333333', role: 'employee', hourly_rate: 13, pin: '4444', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
-        ];
-        for (const profile of defaultProfiles) {
-          await supabase.from('profiles').insert([profile]);
-        }
-        const { data: newProfiles } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
-        setProfiles(newProfiles || []);
-      } else {
-        setProfiles(profilesData || []);
-      }
-
+      setProfiles(profilesData || []);
       setWorkRecords(recordsData || []);
     } catch (err) {
       console.error('Failed to load data:', err);
@@ -145,6 +130,22 @@ export default function App() {
     const { error } = await supabase.from('work_records').delete().eq('id', id);
     if (error) throw error;
     setWorkRecords(prev => prev.filter(r => r.id !== id));
+  };
+
+  const markAllPaidForEmployee = async (userId: string) => {
+    const unpaidApproved = workRecords.filter(r => r.user_id === userId && r.is_approved && !r.is_paid);
+    const ids = unpaidApproved.map(r => r.id);
+    const { error } = await supabase.from('work_records').update({ is_paid: true }).in('id', ids);
+    if (error) throw error;
+    setWorkRecords(prev => prev.map(r => ids.includes(r.id) ? { ...r, is_paid: true } : r));
+  };
+
+  const undoPaymentForEmployee = async (userId: string) => {
+    const paidRecords = workRecords.filter(r => r.user_id === userId && r.is_paid);
+    const ids = paidRecords.map(r => r.id);
+    const { error } = await supabase.from('work_records').update({ is_paid: false }).in('id', ids);
+    if (error) throw error;
+    setWorkRecords(prev => prev.map(r => ids.includes(r.id) ? { ...r, is_paid: false } : r));
   };
 
   const activeUser = currentUser ? profiles.find(p => p.id === currentUser.id) || currentUser : null;
@@ -241,13 +242,14 @@ export default function App() {
                       onToggleApproved={toggleRecordApproved}
                       onUpdateWorkRecord={updateWorkRecord}
                       onDeleteWorkRecord={deleteWorkRecord}
+                      onMarkAllPaidForEmployee={markAllPaidForEmployee}
+                      onUndoPaymentForEmployee={undoPaymentForEmployee}
                     />
                   ) : (
                     <EmployeeDashboard
                       currentUser={activeUser!}
                       workRecords={workRecords}
                       onAddRecord={addWorkRecord}
-                      onUpdateProfile={updateProfile}
                     />
                   )}
                 </div>
