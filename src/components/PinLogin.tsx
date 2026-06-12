@@ -52,8 +52,8 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
 
       {/* Brand Section */}
       <div className="pt-8 px-5 pb-4 text-center">
-        <div className="mx-auto w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center shadow-lg shadow-orange-600/10 mb-3 border border-slate-800">
-          <img src="/logo.png" alt="SMACO Logo" className="w-12 h-12 object-contain rounded-2xl" referrerPolicy="no-referrer" />
+        <div className="mx-auto w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center shadow-lg shadow-orange-600/10 mb-3 border border-slate-800 overflow-hidden">
+          <img src="/logo.png" alt="SMACO Logo" className="w-12 h-12 object-contain" referrerPolicy="no-referrer" />
         </div>
         <h1 className="text-xl font-black tracking-tight font-display text-white">SMACO Plan</h1>
         <p className="text-[10px] text-orange-500 font-mono tracking-widest uppercase mt-0.5">Workforce Management</p>
@@ -111,7 +111,7 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
                           {user.name}
                         </span>
                         <span className="text-[9px] text-slate-500 font-mono block mt-0.5">
-                          {user.role === 'boss' ? 'Manager' : 'Staff'} · {user.role === 'employee' ? user.hourly_rate : ''}{user.role === 'employee' ? '/hr' : ''}
+                          {user.role === 'boss' ? 'Manager' : 'Staff'} {user.role === 'employee' && `· ${user.hourly_rate}/hr`}
                         </span>
                       </div>
                     </div>
@@ -226,7 +226,7 @@ export default function PinLogin({ users, onUnlock }: PinLoginProps) {
 
       <div className="bg-slate-950 p-4 text-center">
         <p className="text-[9px] text-slate-600 font-sans tracking-wide">
-          SMACO Plan • Workforce Management
+          SMACO Plan · Workforce Management
         </p>
       </div>
     </div>

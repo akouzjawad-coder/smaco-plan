@@ -55,9 +55,9 @@ export default function App() {
       if (profilesData && profilesData.length === 0) {
         const defaultProfiles: Omit<Profile, 'id'>[] = [
           { name: 'Manager', phone: '+49 170 0000000', role: 'boss', hourly_rate: 25, pin: '1111', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150' },
-          { name: 'employee 1', phone: '+49 170 1111111', role: 'employee', hourly_rate: 13, pin: '2222', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150' },
-          { name: 'employee 2', phone: '+49 170 2222222', role: 'employee', hourly_rate: 13, pin: '3333', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
-          { name: 'employee 3', phone: '+49 170 3333333', role: 'employee', hourly_rate: 13, pin: '4444', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
+          { name: 'Employee 1', phone: '+49 170 1111111', role: 'employee', hourly_rate: 13, pin: '2222', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150' },
+          { name: 'Employee 2', phone: '+49 170 2222222', role: 'employee', hourly_rate: 13, pin: '3333', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150' },
+          { name: 'Employee 3', phone: '+49 170 3333333', role: 'employee', hourly_rate: 13, pin: '4444', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150' },
         ];
         for (const profile of defaultProfiles) {
           await supabase.from('profiles').insert([profile]);
@@ -104,8 +104,16 @@ export default function App() {
     if (error) throw error;
     setProfiles(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     if (currentUser?.id === id) {
-      setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+      const updated = { ...currentUser, ...updates };
+      setCurrentUser(updated);
+      localStorage.setItem('sp_user_profile', JSON.stringify(updated));
     }
+  };
+
+  const deleteProfile = async (id: string) => {
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) throw error;
+    setProfiles(prev => prev.filter(p => p.id !== id));
   };
 
   const addProfile = async (profile: Omit<Profile, 'id'>) => {
@@ -127,11 +135,16 @@ export default function App() {
     setWorkRecords(prev => prev.map(r => r.id === id ? { ...r, is_approved: isApproved } : r));
   };
 
-  const markRecordsPaid = async (ids: string[]) => {
-    const { error } = await supabase.from('work_records').update({ is_paid: true }).in('id', ids);
+  const updateWorkRecord = async (id: string, updates: Partial<WorkRecord>) => {
+    const { error } = await supabase.from('work_records').update(updates).eq('id', id);
     if (error) throw error;
+    setWorkRecords(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+  };
 
-    setWorkRecords(prev => prev.map(r => ids.includes(r.id) ? { ...r, is_paid: true } : r));
+  const deleteWorkRecord = async (id: string) => {
+    const { error } = await supabase.from('work_records').delete().eq('id', id);
+    if (error) throw error;
+    setWorkRecords(prev => prev.filter(r => r.id !== id));
   };
 
   const activeUser = currentUser ? profiles.find(p => p.id === currentUser.id) || currentUser : null;
@@ -168,22 +181,42 @@ export default function App() {
               <>
                 <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80 pt-1.5 shrink-0 bg-slate-950">
                   <div className="flex items-center gap-2.5">
-                    <img
-                      src={activeUser?.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
-                      alt={activeUser?.name}
-                      className="h-9 w-9 rounded-full object-cover border border-orange-500/30"
-                    />
+                    <div className="relative group cursor-pointer" title="Click to change photo">
+                      <img
+                        src={activeUser?.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
+                        alt={activeUser?.name}
+                        className="h-9 w-9 rounded-full object-cover border border-orange-500/30 group-hover:opacity-80 transition-opacity"
+                        onClick={() => document.getElementById('header-avatar-input')?.click()}
+                      />
+                      <input
+                        id="header-avatar-input"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file && activeUser) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              updateProfile(activeUser.id, { avatar: reader.result as string });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <span className="absolute -bottom-0.5 -right-0.5 bg-orange-600 text-[8px] text-white rounded-full w-3 h-3 flex items-center justify-center font-bold shadow-xs">✎</span>
+                    </div>
                     <div>
                       <h2 className="text-xs font-bold text-white leading-none">{activeUser?.name}</h2>
                       <span className="text-[9px] text-orange-500 font-bold uppercase tracking-wider font-mono mt-1.5 block">
-                        {activeUser?.role === 'boss' ? 'Manager' : 'Staff Associate'}
+                        {activeUser?.role === 'boss' ? 'Manager' : 'Staff'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     <div className="flex items-center gap-1 bg-slate-900 border border-zinc-800 rounded-xl px-2 py-1">
-                      <img src="/logo.png" alt="SMACO" className="w-5 h-5 object-contain" referrerPolicy="no-referrer" />
+                      <img src="/logo.png" alt="SMACO" className="w-5 h-5 object-contain rounded-md" referrerPolicy="no-referrer" />
                       <span className="text-[10px] font-black tracking-tight text-white">SMACO</span>
                     </div>
                     <button
@@ -196,22 +229,25 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto pb-4 space-y-6">
+                <div className="flex-grow overflow-y-auto pb-4 space-y-5">
                   {activeUser?.role === 'boss' ? (
                     <BossDashboard
                       profiles={profiles}
                       workRecords={workRecords}
                       onAddProfile={addProfile}
                       onUpdateProfile={updateProfile}
+                      onDeleteProfile={deleteProfile}
                       onTogglePaid={toggleRecordPaid}
                       onToggleApproved={toggleRecordApproved}
-                      onMarkPaid={markRecordsPaid}
+                      onUpdateWorkRecord={updateWorkRecord}
+                      onDeleteWorkRecord={deleteWorkRecord}
                     />
                   ) : (
                     <EmployeeDashboard
                       currentUser={activeUser!}
                       workRecords={workRecords}
                       onAddRecord={addWorkRecord}
+                      onUpdateProfile={updateProfile}
                     />
                   )}
                 </div>

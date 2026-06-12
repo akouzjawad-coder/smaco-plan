@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Camera } from 'lucide-react';
 import { Profile, WorkRecord } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, calculateWorkHours } from '../utils';
 
@@ -7,9 +7,10 @@ interface EmployeeDashboardProps {
   currentUser: Profile;
   workRecords: WorkRecord[];
   onAddRecord: (record: Omit<WorkRecord, 'id'>) => Promise<void>;
+  onUpdateProfile: (id: string, updates: Partial<Profile>) => Promise<void>;
 }
 
-export default function EmployeeDashboard({ currentUser, workRecords, onAddRecord }: EmployeeDashboardProps) {
+export default function EmployeeDashboard({ currentUser, workRecords, onAddRecord, onUpdateProfile }: EmployeeDashboardProps) {
   const [showModal, setShowModal] = useState(false);
   const [workDate, setWorkDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('09:00');
@@ -51,8 +52,50 @@ export default function EmployeeDashboard({ currentUser, workRecords, onAddRecor
     }
   };
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdateProfile(currentUser.id, { avatar: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div className="space-y-5">
+      {/* Profile Photo */}
+      <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-4">
+        <div className="flex items-center gap-4">
+          <div className="relative group cursor-pointer">
+            <img
+              src={currentUser.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
+              alt={currentUser.name}
+              className="h-16 w-16 rounded-full object-cover border-2 border-orange-500/30 group-hover:opacity-80 transition-opacity"
+              onClick={() => document.getElementById('profile-photo-input')?.click()}
+            />
+            <div className="absolute inset-0 rounded-full bg-slate-950/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <Camera className="w-5 h-5 text-white" />
+            </div>
+            <input
+              id="profile-photo-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-zinc-400">Tap photo to change</p>
+            <p className="text-sm font-bold text-white mt-0.5">{currentUser.name}</p>
+            <p className="text-[10px] text-zinc-400 mt-0.5">
+              Hourly rate: {formatCurrency(currentUser.hourly_rate)}/hr
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-5">
@@ -62,14 +105,6 @@ export default function EmployeeDashboard({ currentUser, workRecords, onAddRecor
         <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 p-5">
           <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider">Unpaid Earnings</p>
           <p className="text-2xl font-bold text-orange-400 mt-1 font-display">{formatCurrency(unpaidEarnings)}</p>
-        </div>
-      </div>
-
-      {/* Rate Info */}
-      <div className="bg-orange-950/20 rounded-2xl border border-orange-900/30 p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-400">Your hourly rate</span>
-          <span className="text-sm font-bold text-orange-400">{formatCurrency(currentUser.hourly_rate)}/hr</span>
         </div>
       </div>
 
@@ -114,7 +149,7 @@ export default function EmployeeDashboard({ currentUser, workRecords, onAddRecor
                       <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-900/40 font-bold">Pending</span>
                     )}
                     {record.is_approved && !record.is_paid && (
-                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-900/40 font-bold">Unpaid</span>
+                      <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-900/40 font-bold">Approved</span>
                     )}
                     {record.is_paid && (
                       <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 font-bold">Paid</span>

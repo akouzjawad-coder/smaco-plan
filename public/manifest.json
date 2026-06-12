@@ -1,7 +1,7 @@
 {
   "name": "SMACO Plan",
   "short_name": "SMACO",
-  "description": "Workforce management for restaurant employees",
+  "description": "Restaurant workforce management - track work hours and payroll",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -12,13 +12,13 @@
       "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
