@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { LogOut } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-import { Profile, WorkRecord, Shift } from './types';
+import { Profile, WorkRecord, Shift, ShiftPlan } from './types';
 import BossDashboard from './components/BossDashboard';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import PinLogin from './components/PinLogin';
@@ -14,6 +14,7 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
+  const [shiftPlans, setShiftPlans] = useState<ShiftPlan[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRealMobile, setIsRealMobile] = useState(false);
@@ -60,9 +61,17 @@ export default function App() {
 
       if (shiftsError) throw shiftsError;
 
+      const { data: shiftPlansData, error: shiftPlansError } = await supabase
+        .from('shift_plans')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (shiftPlansError) throw shiftPlansError;
+
       setProfiles(profilesData || []);
       setWorkRecords(recordsData || []);
       setShifts(shiftsData || []);
+      setShiftPlans(shiftPlansData || []);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
@@ -177,6 +186,20 @@ export default function App() {
     setShifts(prev => prev.filter(s => s.id !== id));
   };
 
+  // Shift plan management
+  const addShiftPlan = async (plan: Omit<ShiftPlan, 'id' | 'created_at'>) => {
+    const { data, error } = await supabase.from('shift_plans').insert([plan]).select().single();
+    if (error) throw error;
+    setShiftPlans(prev => [data, ...prev]);
+    return data;
+  };
+
+  const deleteShiftPlan = async (id: string) => {
+    const { error } = await supabase.from('shift_plans').delete().eq('id', id);
+    if (error) throw error;
+    setShiftPlans(prev => prev.filter(p => p.id !== id));
+  };
+
   const activeUser = currentUser ? profiles.find(p => p.id === currentUser.id) || currentUser : null;
 
   if (isLoading) {
@@ -265,6 +288,7 @@ export default function App() {
                       profiles={profiles}
                       workRecords={workRecords}
                       shifts={shifts}
+                      shiftPlans={shiftPlans}
                       onAddProfile={addProfile}
                       onUpdateProfile={updateProfile}
                       onDeleteProfile={deleteProfile}
@@ -277,12 +301,16 @@ export default function App() {
                       onAddShift={addShift}
                       onUpdateShift={updateShift}
                       onDeleteShift={deleteShift}
+                      onAddShiftPlan={addShiftPlan}
+                      onDeleteShiftPlan={deleteShiftPlan}
+                      currentUserName={activeUser?.name || 'Manager'}
                     />
                   ) : (
                     <EmployeeDashboard
                       currentUser={activeUser!}
                       workRecords={workRecords}
                       shifts={shifts}
+                      shiftPlans={shiftPlans}
                       allProfiles={profiles}
                       onAddRecord={addWorkRecord}
                     />

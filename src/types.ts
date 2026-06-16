@@ -34,3 +34,11 @@ export interface Shift {
   end_time: string;
   role_label: string;
 }
+
+export interface ShiftPlan {
+  id: string;
+  file_name: string;
+  file_data: string;
+  uploaded_by: string;
+  created_at: string;
+}

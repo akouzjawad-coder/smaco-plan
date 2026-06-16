@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus } from 'lucide-react';
-import { Profile, WorkRecord, Shift } from '../types';
+import React, { useState, useRef } from 'react';
+import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus, FileText, Upload } from 'lucide-react';
+import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours } from '../utils';
 
 interface BossDashboardProps {
   profiles: Profile[];
   workRecords: WorkRecord[];
   shifts: Shift[];
+  shiftPlans: ShiftPlan[];
   onAddProfile: (profile: Omit<Profile, 'id'>) => Promise<void>;
   onUpdateProfile: (id: string, updates: Partial<Profile>) => Promise<void>;
   onDeleteProfile: (id: string) => Promise<void>;
@@ -19,12 +20,16 @@ interface BossDashboardProps {
   onAddShift: (shift: Omit<Shift, 'id'>) => Promise<void>;
   onUpdateShift: (id: string, updates: Partial<Shift>) => Promise<void>;
   onDeleteShift: (id: string) => Promise<void>;
+  onAddShiftPlan: (plan: Omit<ShiftPlan, 'id' | 'created_at'>) => Promise<void>;
+  onDeleteShiftPlan: (id: string) => Promise<void>;
+  currentUserName: string;
 }
 
 export default function BossDashboard({
   profiles,
   workRecords,
   shifts,
+  shiftPlans,
   onAddProfile,
   onUpdateProfile,
   onDeleteProfile,
@@ -37,15 +42,21 @@ export default function BossDashboard({
   onAddShift,
   onUpdateShift,
   onDeleteShift,
+  onAddShiftPlan,
+  onDeleteShiftPlan,
+  currentUserName,
 }: BossDashboardProps) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editProfileId, setEditProfileId] = useState<string | null>(null);
   const [editRecordId, setEditRecordId] = useState<string | null>(null);
   const [viewEmployeeId, setViewEmployeeId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ type: 'profile' | 'record' | 'shift'; id: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'profile' | 'record' | 'shift' | 'shiftPlan'; id: string } | null>(null);
   const [confirmPay, setConfirmPay] = useState<{ userId: string; unpaid: number } | null>(null);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editShiftId, setEditShiftId] = useState<string | null>(null);
+  const [isUploadingPlan, setIsUploadingPlan] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
@@ -132,6 +143,8 @@ export default function BossDashboard({
       await onDeleteWorkRecord(confirmDelete.id);
     } else if (confirmDelete.type === 'shift') {
       await onDeleteShift(confirmDelete.id);
+    } else if (confirmDelete.type === 'shiftPlan') {
+      await onDeleteShiftPlan(confirmDelete.id);
     }
     setConfirmDelete(null);
   };
@@ -190,6 +203,38 @@ export default function BossDashboard({
       console.error('Failed to update shift:', err);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file');
+      return;
+    }
+
+    setIsUploadingPlan(true);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        await onAddShiftPlan({
+          file_name: file.name,
+          file_data: base64Data,
+          uploaded_by: currentUserName,
+        });
+        setIsUploadingPlan(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to upload PDF:', err);
+      setIsUploadingPlan(false);
+    }
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -388,6 +433,64 @@ export default function BossDashboard({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* PDF Shift Plans */}
+      <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
+        <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white font-display">Shift Plans (PDF)</h3>
+          <label className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1">
+            <Upload className="w-3 h-3" /> Upload PDF
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={handlePdfUpload}
+              disabled={isUploadingPlan}
+            />
+          </label>
+        </div>
+
+        <div className="divide-y divide-zinc-800/80">
+          {shiftPlans.length === 0 ? (
+            <div className="p-6 text-center">
+              <p className="text-xs text-slate-400 mb-2">No shift plans uploaded</p>
+              <p className="text-[10px] text-zinc-600">Upload a PDF to share with your team</p>
+            </div>
+          ) : (
+            shiftPlans.map(plan => (
+              <div key={plan.id} className="p-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-lg bg-red-950/50 border border-red-900/50 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{plan.file_name}</p>
+                    <p className="text-[10px] text-zinc-400">
+                      Uploaded by {plan.uploaded_by} · {new Date(plan.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <a
+                    href={plan.file_data}
+                    download={plan.file_name}
+                    className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer"
+                  >
+                    View
+                  </a>
+                  <button
+                    onClick={() => setConfirmDelete({ type: 'shiftPlan', id: plan.id })}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

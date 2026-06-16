@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, Clock, User, MapPin } from 'lucide-react';
-import { Profile, WorkRecord, Shift } from '../types';
+import { Plus, Calendar, Clock, FileText, Download } from 'lucide-react';
+import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, calculateWorkHours } from '../utils';
 
 interface EmployeeDashboardProps {
   currentUser: Profile;
   workRecords: WorkRecord[];
   shifts: Shift[];
+  shiftPlans: ShiftPlan[];
   allProfiles: Profile[];
   onAddRecord: (record: Omit<WorkRecord, 'id'>) => Promise<void>;
 }
 
-export default function EmployeeDashboard({ currentUser, workRecords, shifts, allProfiles, onAddRecord }: EmployeeDashboardProps) {
+export default function EmployeeDashboard({ currentUser, workRecords, shifts, shiftPlans, allProfiles, onAddRecord }: EmployeeDashboardProps) {
   const [showModal, setShowModal] = useState(false);
   const [workDate, setWorkDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('09:00');
@@ -214,6 +215,41 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, al
           })}
         </div>
       </div>
+
+      {/* PDF Shift Plans */}
+      {shiftPlans.length > 0 && (
+        <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 shadow-xs overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950">
+            <h3 className="text-sm font-bold text-white font-display">Shift Plans</h3>
+            <p className="text-[10px] text-slate-400">PDF documents from manager</p>
+          </div>
+
+          <div className="divide-y divide-zinc-800/80">
+            {shiftPlans.map(plan => (
+              <div key={plan.id} className="p-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="w-10 h-10 rounded-lg bg-red-950/50 border border-red-900/50 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{plan.file_name}</p>
+                    <p className="text-[10px] text-zinc-400">
+                      {new Date(plan.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={plan.file_data}
+                  download={plan.file_name}
+                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" /> View PDF
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add Work Record Modal */}
       {showModal && (
