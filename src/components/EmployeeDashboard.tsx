@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, Clock, FileText, Download } from 'lucide-react';
+import { Plus, Calendar, Clock, FileText, Download, X, Maximize2 } from 'lucide-react';
 import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, calculateWorkHours } from '../utils';
 
@@ -19,6 +19,7 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
   const [endTime, setEndTime] = useState('17:00');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [viewingPdf, setViewingPdf] = useState<ShiftPlan | null>(null);
 
   // Only show UNPAID records for this employee
   const myRecords = workRecords.filter(r => r.user_id === currentUser.id);
@@ -158,6 +159,36 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
           <p className="text-[10px] text-slate-400">Your shifts this week</p>
         </div>
 
+        {/* PDF Shift Plan Viewer */}
+        {shiftPlans.length > 0 && (
+          <div className="border-b border-zinc-800">
+            <div className="p-3 bg-orange-950/20">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs font-bold text-white">Shift Plan PDF</span>
+                </div>
+                <button
+                  onClick={() => setViewingPdf(shiftPlans[0])}
+                  className="text-[10px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <Maximize2 className="w-3 h-3" /> Full View
+                </button>
+              </div>
+              <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
+                <iframe
+                  src={shiftPlans[0].file_data}
+                  className="w-full h-48"
+                  title="Shift Plan PDF"
+                />
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1.5 text-center">
+                {shiftPlans[0].file_name} · Uploaded {new Date(shiftPlans[0].created_at).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="divide-y divide-zinc-800/80">
           {weekDates.map((date, idx) => {
             const myShifts = shifts.filter(s => s.user_id === currentUser.id && s.shift_date === date);
@@ -215,41 +246,6 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
           })}
         </div>
       </div>
-
-      {/* PDF Shift Plans */}
-      {shiftPlans.length > 0 && (
-        <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 shadow-xs overflow-hidden">
-          <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950">
-            <h3 className="text-sm font-bold text-white font-display">Shift Plans</h3>
-            <p className="text-[10px] text-slate-400">PDF documents from manager</p>
-          </div>
-
-          <div className="divide-y divide-zinc-800/80">
-            {shiftPlans.map(plan => (
-              <div key={plan.id} className="p-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-lg bg-red-950/50 border border-red-900/50 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-red-400" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white truncate">{plan.file_name}</p>
-                    <p className="text-[10px] text-zinc-400">
-                      {new Date(plan.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-                <a
-                  href={plan.file_data}
-                  download={plan.file_name}
-                  className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <Download className="w-3 h-3" /> View PDF
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Add Work Record Modal */}
       {showModal && (
@@ -375,6 +371,40 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Full Screen PDF Viewer Modal */}
+      {viewingPdf && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col z-50">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-slate-900">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-orange-400" />
+              <span className="text-sm font-bold text-white">{viewingPdf.file_name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={viewingPdf.file_data}
+                download={viewingPdf.file_name}
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+              >
+                <Download className="w-3 h-3" /> Download
+              </a>
+              <button
+                onClick={() => setViewingPdf(null)}
+                className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 p-4 overflow-hidden">
+            <iframe
+              src={viewingPdf.file_data}
+              className="w-full h-full rounded-xl border border-zinc-800"
+              title="Shift Plan PDF"
+            />
           </div>
         </div>
       )}

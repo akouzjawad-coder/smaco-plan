@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus, FileText, Upload } from 'lucide-react';
+import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus, FileText, Upload, Maximize2 } from 'lucide-react';
 import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours } from '../utils';
 
@@ -55,6 +55,7 @@ export default function BossDashboard({
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [editShiftId, setEditShiftId] = useState<string | null>(null);
   const [isUploadingPlan, setIsUploadingPlan] = useState(false);
+  const [viewingPdf, setViewingPdf] = useState<ShiftPlan | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -353,20 +354,71 @@ export default function BossDashboard({
       <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
         <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
           <h3 className="text-sm font-bold text-white font-display">Weekly Schedule</h3>
-          <button
-            onClick={() => {
-              setShiftUserId('');
-              setShiftDate(new Date().toISOString().split('T')[0]);
-              setShiftStartTime('09:00');
-              setShiftEndTime('17:00');
-              setShiftRoleLabel('');
-              setShowScheduleModal(true);
-            }}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1"
-          >
-            <Plus className="w-3 h-3" /> Add Shift
-          </button>
+          <div className="flex items-center gap-2">
+            <label className="bg-slate-800 hover:bg-slate-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1">
+              <Upload className="w-3 h-3" /> PDF
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfUpload}
+                disabled={isUploadingPlan}
+              />
+            </label>
+            <button
+              onClick={() => {
+                setShiftUserId('');
+                setShiftDate(new Date().toISOString().split('T')[0]);
+                setShiftStartTime('09:00');
+                setShiftEndTime('17:00');
+                setShiftRoleLabel('');
+                setShowScheduleModal(true);
+              }}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1"
+            >
+              <Plus className="w-3 h-3" /> Add Shift
+            </button>
+          </div>
         </div>
+
+        {/* PDF Shift Plan Viewer */}
+        {shiftPlans.length > 0 && (
+          <div className="border-b border-zinc-800">
+            <div className="p-3 bg-orange-950/20">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-orange-400" />
+                  <span className="text-xs font-bold text-white">Shift Plan PDF</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setViewingPdf(shiftPlans[0])}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Maximize2 className="w-3 h-3" /> Full View
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete({ type: 'shiftPlan', id: shiftPlans[0].id })}
+                    className="p-1 rounded bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+              <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
+                <iframe
+                  src={shiftPlans[0].file_data}
+                  className="w-full h-48"
+                  title="Shift Plan PDF"
+                />
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1.5 text-center">
+                {shiftPlans[0].file_name} · Uploaded {new Date(shiftPlans[0].created_at).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="divide-y divide-zinc-800/80">
           {weekDates.map((date, idx) => {
@@ -436,31 +488,16 @@ export default function BossDashboard({
         </div>
       </div>
 
-      {/* PDF Shift Plans */}
-      <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
-        <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white font-display">Shift Plans (PDF)</h3>
-          <label className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[10px] py-1.5 px-3 rounded-lg cursor-pointer transition-all flex items-center gap-1">
-            <Upload className="w-3 h-3" /> Upload PDF
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={handlePdfUpload}
-              disabled={isUploadingPlan}
-            />
-          </label>
-        </div>
+      {/* All PDF Shift Plans (if multiple) */}
+      {shiftPlans.length > 1 && (
+        <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
+          <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950">
+            <h3 className="text-sm font-bold text-white font-display">All Shift Plans</h3>
+            <p className="text-[10px] text-slate-400">Previous PDF documents</p>
+          </div>
 
-        <div className="divide-y divide-zinc-800/80">
-          {shiftPlans.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-xs text-slate-400 mb-2">No shift plans uploaded</p>
-              <p className="text-[10px] text-zinc-600">Upload a PDF to share with your team</p>
-            </div>
-          ) : (
-            shiftPlans.map(plan => (
+          <div className="divide-y divide-zinc-800/80">
+            {shiftPlans.slice(1).map(plan => (
               <div key={plan.id} className="p-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-lg bg-red-950/50 border border-red-900/50 flex items-center justify-center flex-shrink-0">
@@ -469,18 +506,17 @@ export default function BossDashboard({
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-white truncate">{plan.file_name}</p>
                     <p className="text-[10px] text-zinc-400">
-                      Uploaded by {plan.uploaded_by} · {new Date(plan.created_at).toLocaleDateString()}
+                      {new Date(plan.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <a
-                    href={plan.file_data}
-                    download={plan.file_name}
+                  <button
+                    onClick={() => setViewingPdf(plan)}
                     className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer"
                   >
                     View
-                  </a>
+                  </button>
                   <button
                     onClick={() => setConfirmDelete({ type: 'shiftPlan', id: plan.id })}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900 text-zinc-400 hover:text-rose-400 transition-all cursor-pointer"
@@ -489,10 +525,10 @@ export default function BossDashboard({
                   </button>
                 </div>
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Staff Management */}
       <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 overflow-hidden">
@@ -954,6 +990,40 @@ export default function BossDashboard({
               <button onClick={() => setConfirmPay(null)} className="flex-1 text-xs text-zinc-300 bg-zinc-800 py-2 rounded-lg cursor-pointer">Cancel</button>
               <button onClick={handleConfirmPay} className="flex-1 text-xs text-white bg-orange-600 py-2 rounded-lg cursor-pointer">Pay Now</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full Screen PDF Viewer Modal */}
+      {viewingPdf && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col z-50">
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-slate-900">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-orange-400" />
+              <span className="text-sm font-bold text-white">{viewingPdf.file_name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={viewingPdf.file_data}
+                download={viewingPdf.file_name}
+                className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+              >
+                <Download className="w-3 h-3" /> Download
+              </a>
+              <button
+                onClick={() => setViewingPdf(null)}
+                className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 p-4 overflow-hidden">
+            <iframe
+              src={viewingPdf.file_data}
+              className="w-full h-full rounded-xl border border-zinc-800"
+              title="Shift Plan PDF"
+            />
           </div>
         </div>
       )}
