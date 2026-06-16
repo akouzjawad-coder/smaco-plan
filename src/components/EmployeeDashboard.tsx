@@ -155,8 +155,8 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
       {/* Weekly Schedule */}
       <div className="bg-slate-900 rounded-2xl border border-zinc-800/80 shadow-xs overflow-hidden">
         <div className="px-4 py-3 border-b border-zinc-800 bg-slate-950">
-          <h3 className="text-sm font-bold text-white font-display">My Weekly Schedule</h3>
-          <p className="text-[10px] text-slate-400">Your shifts this week</p>
+          <h3 className="text-sm font-bold text-white font-display">Weekly Schedule</h3>
+          <p className="text-[10px] text-slate-400">All staff shifts this week</p>
         </div>
 
         {/* PDF Shift Plan Viewer */}
@@ -189,9 +189,12 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
           </div>
         )}
 
+        {/* Full Schedule by Day - All Employees */}
         <div className="divide-y divide-zinc-800/80">
           {weekDates.map((date, idx) => {
-            const myShifts = shifts.filter(s => s.user_id === currentUser.id && s.shift_date === date);
+            const dayShifts = shifts.filter(s => s.shift_date === date);
+            const myShifts = dayShifts.filter(s => s.user_id === currentUser.id);
+            const otherShifts = dayShifts.filter(s => s.user_id !== currentUser.id);
             const today = new Date().toISOString().split('T')[0] === date;
 
             return (
@@ -204,42 +207,58 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
                   {today && <span className="text-[9px] text-orange-400 bg-orange-950/30 px-2 py-0.5 rounded-full font-bold">Today</span>}
                 </div>
 
-                {myShifts.length === 0 ? (
-                  <p className="text-[10px] text-zinc-600 italic">No shift scheduled</p>
+                {dayShifts.length === 0 ? (
+                  <p className="text-[10px] text-zinc-600 italic">No shifts scheduled</p>
                 ) : (
-                  myShifts.map(shift => {
-                    const coworkers = shifts.filter(s =>
-                      s.shift_date === date &&
-                      s.user_id !== currentUser.id &&
-                      s.start_time === shift.start_time
-                    );
-
-                    return (
-                      <div key={shift.id} className="bg-slate-950 rounded-xl p-2.5 mt-2 border border-zinc-800">
+                  <div className="space-y-1.5">
+                    {/* My shifts first */}
+                    {myShifts.map(shift => (
+                      <div key={shift.id} className="bg-orange-950/30 rounded-lg p-2 border border-orange-900/50">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3 h-3 text-orange-400" />
-                            <span className="text-xs font-mono text-white">{shift.start_time} - {shift.end_time}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-5 h-5 rounded-full bg-orange-600 flex items-center justify-center">
+                              <span className="text-[8px] text-white font-bold">Me</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-orange-400" />
+                              <span className="text-xs font-mono text-white">{shift.start_time} - {shift.end_time}</span>
+                            </div>
                           </div>
                           {shift.role_label && (
                             <span className="text-[9px] text-orange-400 bg-orange-950/30 px-2 py-0.5 rounded-full">{shift.role_label}</span>
                           )}
                         </div>
-                        {coworkers.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-zinc-800">
-                            <p className="text-[9px] text-zinc-500 mb-1">Working with:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {coworkers.map(cw => (
-                                <span key={cw.id} className="text-[9px] text-zinc-400 bg-slate-800 px-2 py-0.5 rounded-full">
-                                  {cw.user_name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    );
-                  })
+                    ))}
+
+                    {/* Other employees */}
+                    {otherShifts.map(shift => {
+                      const employee = allProfiles.find(p => p.id === shift.user_id);
+                      return (
+                        <div key={shift.id} className="bg-slate-950 rounded-lg p-2 border border-zinc-800">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={employee?.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
+                                alt={shift.user_name}
+                                className="w-5 h-5 rounded-full object-cover"
+                              />
+                              <div>
+                                <span className="text-[10px] text-white font-medium">{shift.user_name}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <Clock className="w-2.5 h-2.5 text-zinc-400" />
+                                  <span className="text-[10px] font-mono text-zinc-400">{shift.start_time} - {shift.end_time}</span>
+                                </div>
+                              </div>
+                            </div>
+                            {shift.role_label && (
+                              <span className="text-[8px] text-zinc-400 bg-slate-800 px-1.5 py-0.5 rounded">{shift.role_label}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             );

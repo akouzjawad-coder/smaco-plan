@@ -1,14 +1,14 @@
 import React, { useState, useRef } from 'react';
-import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus, FileText, Upload, Maximize2 } from 'lucide-react';
-import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
-import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours } from '../utils';
+import { Download, UserPlus, CircleCheck, Pencil, Trash2, X, TriangleAlert as AlertTriangle, ChevronRight, Undo2, Calendar, Clock, Plus, FileText, Upload, Maximize2, CircleAlert as AlertCircle, Check, UserPlus as UserPlus2 } from 'lucide-react';
+import { Profile, WorkRecord, Shift, ShiftPlan, ParsedSchedule, ShiftTypeSetting, ParsedShift } from '../types';
+import { formatCurrency, formatHoursDecimal, formatHumanDate, exportToPayrollCSV, triggerDownload, calculateWorkHours, parsePdfScheduleText, extractTextFromPdf, DEFAULT_SHIFT_TYPE_SETTINGS } from '../utils';
 
 interface BossDashboardProps {
   profiles: Profile[];
   workRecords: WorkRecord[];
   shifts: Shift[];
   shiftPlans: ShiftPlan[];
-  onAddProfile: (profile: Omit<Profile, 'id'>) => Promise<void>;
+  onAddProfile: (profile: Omit<Profile, 'id'>) => Promise<Profile>;
   onUpdateProfile: (id: string, updates: Partial<Profile>) => Promise<void>;
   onDeleteProfile: (id: string) => Promise<void>;
   onTogglePaid: (id: string, isPaid: boolean) => Promise<void>;
@@ -56,6 +56,10 @@ export default function BossDashboard({
   const [editShiftId, setEditShiftId] = useState<string | null>(null);
   const [isUploadingPlan, setIsUploadingPlan] = useState(false);
   const [viewingPdf, setViewingPdf] = useState<ShiftPlan | null>(null);
+  const [importPreview, setImportPreview] = useState<ParsedSchedule | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [shiftTypeSettings, setShiftTypeSettings] = useState<ShiftTypeSetting[]>(DEFAULT_SHIFT_TYPE_SETTINGS);
+  const [nameMappings, setNameMappings] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -221,11 +225,23 @@ export default function BossDashboard({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64Data = reader.result as string;
+
+        // Extract text from PDF
+        const text = await extractTextFromPdf(base64Data);
+
+        // Parse the schedule
+        const parsed = parsePdfScheduleText(text, profiles, shiftTypeSettings);
+
+        // Store the PDF plan
         await onAddShiftPlan({
           file_name: file.name,
           file_data: base64Data,
           uploaded_by: currentUserName,
         });
+
+        // Show import preview
+        setImportPreview(parsed);
+        setShowImportModal(true);
         setIsUploadingPlan(false);
       };
       reader.readAsDataURL(file);
@@ -236,6 +252,92 @@ export default function BossDashboard({
     // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+
+    setIsSubmitting(true);
+    try {
+      // Create shifts from parsed data
+      for (const shift of importPreview.shifts) {
+        let employeeId = shift.employeeId;
+        let employeeName = shift.employeeName;
+
+        // Check if we have a mapping for unmatched names
+        if (!employeeId && nameMappings[shift.employeeName]) {
+          employeeId = nameMappings[shift.employeeName];
+          const profile = profiles.find(p => p.id === employeeId);
+          employeeName = profile?.name || shift.employeeName;
+        }
+
+        if (employeeId) {
+          await onAddShift({
+            user_id: employeeId,
+            user_name: employeeName,
+            shift_date: shift.shiftDate,
+            start_time: shift.startTime,
+            end_time: shift.endTime,
+            role_label: shift.roleLabel,
+          });
+        }
+      }
+
+      setShowImportModal(false);
+      setImportPreview(null);
+      setNameMappings({});
+    } catch (err) {
+      console.error('Failed to import shifts:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateStaffFromUnmatched = async (name: string) => {
+    try {
+      const profile = await onAddProfile({
+        name,
+        phone: '',
+        role: 'employee',
+        hourly_rate: 13,
+        pin: Math.floor(1000 + Math.random() * 9000).toString(),
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150',
+      });
+
+      // Update the mapping
+      setNameMappings(prev => ({ ...prev, [name]: profile.id }));
+
+      // Update import preview
+      if (importPreview) {
+        setImportPreview({
+          ...importPreview,
+          shifts: importPreview.shifts.map(s =>
+            s.employeeName === name ? { ...s, employeeId: profile.id } : s
+          ),
+          unmatchedNames: importPreview.unmatchedNames.filter(n => n !== name),
+          unmatchedShifts: importPreview.unmatchedShifts.filter(s => s.employeeName !== name),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to create staff:', err);
+    }
+  };
+
+  const handleLinkUnmatched = (name: string, employeeId: string) => {
+    setNameMappings(prev => ({ ...prev, [name]: employeeId }));
+
+    // Update import preview
+    if (importPreview) {
+      const employee = profiles.find(p => p.id === employeeId);
+      setImportPreview({
+        ...importPreview,
+        shifts: importPreview.shifts.map(s =>
+          s.employeeName === name ? { ...s, employeeId, employeeName: employee?.name || name } : s
+        ),
+        unmatchedNames: importPreview.unmatchedNames.filter(n => n !== name),
+        unmatchedShifts: importPreview.unmatchedShifts.filter(s => s.employeeName !== name),
+      });
     }
   };
 
@@ -1024,6 +1126,169 @@ export default function BossDashboard({
               className="w-full h-full rounded-xl border border-zinc-800"
               title="Shift Plan PDF"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Import Preview Modal */}
+      {showImportModal && importPreview && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl border border-zinc-800 flex flex-col">
+            {/* Header */}
+            <div className="p-4 border-b border-zinc-800 bg-slate-950 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-white font-display">Import Schedule Preview</h3>
+                <p className="text-[10px] text-slate-400">Week {importPreview.weekType} · {importPreview.shifts.length} shifts found</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportPreview(null);
+                }}
+                className="p-2 rounded-full bg-slate-800 hover:bg-slate-700 text-zinc-400 hover:text-white transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Unmatched Names Warning */}
+              {importPreview.unmatchedNames.length > 0 && (
+                <div className="bg-amber-950/30 border border-amber-900/50 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                    <span className="text-sm font-bold text-amber-300">Unmatched Employees</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mb-3">
+                    These names were not found in your staff list. Create new employees or link to existing ones.
+                  </p>
+                  <div className="space-y-2">
+                    {importPreview.unmatchedNames.map(name => (
+                      <div key={name} className="flex items-center gap-2 flex-wrap bg-slate-950 rounded-lg p-2">
+                        <span className="text-xs font-bold text-white min-w-[100px]">{name}</span>
+                        <select
+                          className="flex-1 text-[10px] px-2 py-1.5 rounded bg-slate-800 border border-zinc-700 text-white cursor-pointer"
+                          value={nameMappings[name] || ''}
+                          onChange={(e) => handleLinkUnmatched(name, e.target.value)}
+                        >
+                          <option value="">Link to existing...</option>
+                          {staff.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleCreateStaffFromUnmatched(name)}
+                          className="text-[10px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white cursor-pointer flex items-center gap-1"
+                        >
+                          <UserPlus2 className="w-3 h-3" /> Create New
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Shift Type Settings */}
+              <div className="bg-slate-950 rounded-xl border border-zinc-800 p-3">
+                <p className="text-[10px] text-zinc-400 font-bold uppercase mb-2">Default Shift Type Times</p>
+                <div className="space-y-2">
+                  {shiftTypeSettings.map((setting, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs text-white min-w-[80px]">{setting.name}</span>
+                      <input
+                        type="time"
+                        value={setting.startTime}
+                        onChange={(e) => {
+                          const newSettings = [...shiftTypeSettings];
+                          newSettings[idx] = { ...setting, startTime: e.target.value };
+                          setShiftTypeSettings(newSettings);
+                        }}
+                        className="text-[10px] px-2 py-1 rounded bg-slate-800 border border-zinc-700 text-white"
+                      />
+                      <span className="text-zinc-500">to</span>
+                      <input
+                        type="time"
+                        value={setting.endTime}
+                        onChange={(e) => {
+                          const newSettings = [...shiftTypeSettings];
+                          newSettings[idx] = { ...setting, endTime: e.target.value };
+                          setShiftTypeSettings(newSettings);
+                        }}
+                        className="text-[10px] px-2 py-1 rounded bg-slate-800 border border-zinc-700 text-white"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Shifts Preview by Employee */}
+              <div className="space-y-3">
+                <p className="text-[10px] text-zinc-400 font-bold uppercase">Shifts to Import</p>
+                {(() => {
+                  type EmployeeGroup = { name: string; shifts: ParsedShift[]; matched: boolean };
+                  const groupedByEmployee = importPreview.shifts.reduce<Record<string, EmployeeGroup>>((acc, shift) => {
+                    const key = shift.employeeId || shift.employeeName;
+                    if (!acc[key]) acc[key] = { name: shift.employeeName, shifts: [], matched: !!shift.employeeId };
+                    acc[key].shifts.push(shift);
+                    return acc;
+                  }, {});
+
+                  return Object.entries(groupedByEmployee).map(([key, data]: [string, EmployeeGroup]) => (
+                    <div key={key} className={`rounded-xl border ${data.matched ? 'border-zinc-800 bg-slate-950' : 'border-amber-900/50 bg-amber-950/20'} p-3`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        {data.matched ? (
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-amber-400" />
+                        )}
+                        <span className="text-xs font-bold text-white">{data.name}</span>
+                        <span className="text-[9px] text-zinc-500">{data.shifts.length} shifts</span>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 text-center">
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => {
+                          const dayShift = data.shifts.find(s => s.day === day);
+                          return (
+                            <div key={day} className="text-[9px]">
+                              <div className="text-zinc-500 font-bold">{day}</div>
+                              {dayShift ? (
+                                <div className={`${dayShift.isOvernight ? 'text-orange-400' : 'text-white'} font-mono bg-slate-800 rounded px-1 py-0.5 mt-1`}>
+                                  {dayShift.startTime.slice(0, 5)}-{dayShift.endTime.slice(0, 5)}
+                                  {dayShift.roleLabel && <span className="block text-orange-400">{dayShift.roleLabel}</span>}
+                                </div>
+                              ) : (
+                                <div className="text-zinc-600 py-0.5 mt-1">-</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-zinc-800 bg-slate-950 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportPreview(null);
+                  setNameMappings({});
+                }}
+                className="flex-1 text-xs text-zinc-300 bg-slate-800 hover:bg-slate-700 py-3 rounded-xl cursor-pointer font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                disabled={isSubmitting || (importPreview.unmatchedNames.length > 0 && importPreview.unmatchedNames.some(n => !nameMappings[n]))}
+                className="flex-1 text-xs text-white bg-orange-600 hover:bg-orange-700 py-3 rounded-xl cursor-pointer font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Importing...' : `Import ${importPreview.shifts.length} Shifts`}
+              </button>
+            </div>
           </div>
         </div>
       )}

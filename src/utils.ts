@@ -1,4 +1,199 @@
-import { Profile, WorkRecord } from './types';
+import { Profile, WorkRecord, ParsedShift, ParsedSchedule, ShiftTypeSetting } from './types';
+
+export const DEFAULT_SHIFT_TYPE_SETTINGS: ShiftTypeSetting[] = [
+  { name: 'Cleaning', startTime: '23:00', endTime: '05:00' },
+];
+
+export function getWeekDatesFromDate(date: Date): string[] {
+  const dayOfWeek = date.getDay();
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+  const dates: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(d.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+export function parseTimeRange(timeStr: string, shiftTypeSettings: ShiftTypeSetting[]): { start: string; end: string; isOvernight: boolean } | null {
+  const trimmed = timeStr.trim();
+
+  // Check for "Frei", "Frei (Game)", "-" - no shift
+  if (trimmed === 'Frei' || trimmed.startsWith('Frei') || trimmed === '-' || trimmed === '') {
+    return null;
+  }
+
+  // Check for role labels like "Cleaning"
+  const shiftType = shiftTypeSettings.find(s => s.name.toLowerCase() === trimmed.toLowerCase());
+  if (shiftType) {
+    const isOvernight = parseInt(shiftType.endTime.split(':')[0]) < parseInt(shiftType.startTime.split(':')[0]);
+    return { start: shiftType.startTime, end: shiftType.endTime, isOvernight };
+  }
+
+  // Parse time format like "11-19" or "16-00" or "18-00"
+  const match = trimmed.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (match) {
+    const startHour = parseInt(match[1]);
+    const endHour = parseInt(match[2]);
+
+    const startTime = `${startHour.toString().padStart(2, '0')}:00`;
+    const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+
+    // Check if overnight (end hour < start hour, or end is 00)
+    const isOvernight = endHour <= startHour;
+
+    return { start: startTime, end: endTime, isOvernight };
+  }
+
+  return null;
+}
+
+export function parsePdfScheduleText(text: string, profiles: Profile[], shiftTypeSettings: ShiftTypeSetting[]): ParsedSchedule {
+  const lines = text.split('\n').filter(l => l.trim());
+
+  let weekType: 'A' | 'B' | 'Unknown' = 'Unknown';
+  let weekStartDate = getWeekDatesFromDate(new Date())[0]; // Default to current week
+
+  const shifts: ParsedShift[] = [];
+  const unmatchedNames: string[] = [];
+  const unmatchedShifts: ParsedShift[] = [];
+
+  const dayColumns = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const weekDates = getWeekDatesFromDate(new Date());
+
+  // Try to detect week type from title
+  for (const line of lines) {
+    if (line.toLowerCase().includes('week a')) {
+      weekType = 'A';
+      break;
+    } else if (line.toLowerCase().includes('week b')) {
+      weekType = 'B';
+      break;
+    }
+  }
+
+  // Find the header row with day columns
+  let headerIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toLowerCase();
+    // Check if line contains multiple day names
+    const hasColumns = dayColumns.every(d => line.includes(d.toLowerCase())) ||
+                       line.includes('mon') && line.includes('tue') && line.includes('wed');
+    if (hasColumns) {
+      headerIndex = i;
+      break;
+    }
+  }
+
+  if (headerIndex === -1) {
+    // Try alternative: look for "Mitarbeiter" header
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes('mitarbeiter')) {
+        headerIndex = i;
+        break;
+      }
+    }
+  }
+
+  // Parse employee rows (after header)
+  const startRow = headerIndex >= 0 ? headerIndex + 1 : 0;
+
+  for (let i = startRow; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Split by common delimiters: |, tab, or multiple spaces
+    let cells: string[];
+    if (line.includes('|')) {
+      cells = line.split('|').map(c => c.trim());
+    } else {
+      cells = line.split(/\t+|\s{2,}/).map(c => c.trim()).filter(c => c);
+    }
+
+    if (cells.length < 2) continue;
+
+    const employeeName = cells[0];
+    if (!employeeName || employeeName.toLowerCase().includes('mitarbeiter')) continue;
+
+    // Find matching profile
+    const matchedProfile = profiles.find(p =>
+      p.name.toLowerCase() === employeeName.toLowerCase() ||
+      p.name.toLowerCase().includes(employeeName.toLowerCase()) ||
+      employeeName.toLowerCase().includes(p.name.toLowerCase())
+    );
+
+    // Parse each day's shift
+    for (let dayIndex = 0; dayIndex < Math.min(7, cells.length - 1); dayIndex++) {
+      const cellValue = cells[dayIndex + 1]?.trim() || '';
+      const shiftDate = weekDates[dayIndex];
+
+      const parsed = parseTimeRange(cellValue, shiftTypeSettings);
+      if (!parsed) continue; // No shift (Frei, -, empty)
+
+      const shift: ParsedShift = {
+        employeeName,
+        employeeId: matchedProfile?.id,
+        day: dayColumns[dayIndex],
+        shiftDate,
+        startTime: parsed.start,
+        endTime: parsed.end,
+        roleLabel: shiftTypeSettings.some(s => s.name.toLowerCase() === cellValue.toLowerCase()) ? cellValue : '',
+        isOvernight: parsed.isOvernight,
+        isNoShift: false,
+      };
+
+      shifts.push(shift);
+
+      if (!matchedProfile) {
+        if (!unmatchedNames.includes(employeeName)) {
+          unmatchedNames.push(employeeName);
+        }
+        unmatchedShifts.push(shift);
+      }
+    }
+  }
+
+  return {
+    weekType,
+    weekStartDate,
+    shifts,
+    unmatchedNames,
+    unmatchedShifts,
+  };
+}
+
+export async function extractTextFromPdf(fileData: string): Promise<string> {
+  // Convert base64 data URL to binary
+  const base64Data = fileData.split(',')[1] || fileData;
+  const binaryString = atob(base64Data);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  // Use pdf.js to extract text
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+  const loadingTask = pdfjsLib.getDocument({ data: bytes });
+  const pdf = await loadingTask.promise;
+
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .filter((item) => 'str' in item)
+      .map((item) => ('str' in item ? item.str : ''))
+      .join(' ');
+    fullText += pageText + '\n';
+  }
+
+  return fullText;
+}
 
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('de-DE', {
