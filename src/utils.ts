@@ -165,6 +165,143 @@ export function parsePdfScheduleText(text: string, profiles: Profile[], shiftTyp
   };
 }
 
+export function parseCsvSchedule(csvText: string, profiles: Profile[], shiftTypeSettings: ShiftTypeSetting[]): ParsedSchedule {
+  const lines = csvText.split('\n').filter(l => l.trim());
+  if (lines.length < 2) {
+    return {
+      weekType: 'Unknown',
+      weekStartDate: getWeekDatesFromDate(new Date())[0],
+      shifts: [],
+      unmatchedNames: [],
+      unmatchedShifts: [],
+    };
+  }
+
+  let weekType: 'A' | 'B' | 'Unknown' = 'Unknown';
+  const weekDates = getWeekDatesFromDate(new Date());
+  const shifts: ParsedShift[] = [];
+  const unmatchedNames: string[] = [];
+  const unmatchedShifts: ParsedShift[] = [];
+  const dayColumns = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Parse header row to find column indices
+  const headerLine = lines[0].toLowerCase();
+  const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+
+  // Find week column
+  const weekColIdx = headers.findIndex(h => h === 'week');
+
+  // Find employee/name column
+  const employeeColIdx = headers.findIndex(h => h === 'employee' || h === 'name' || h === 'mitarbeiter');
+
+  // Find day columns
+  const dayColIndices = dayColumns.map(day => headers.findIndex(h => h === day.toLowerCase()));
+
+  // Parse each data row
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvLine(lines[i]);
+    if (cells.length < 2) continue;
+
+    // Get week type from row if available
+    if (weekColIdx >= 0 && cells[weekColIdx]) {
+      const weekVal = cells[weekColIdx].trim().toLowerCase();
+      if (weekVal === 'a' || weekVal.includes('week a')) {
+        weekType = 'A';
+      } else if (weekVal === 'b' || weekVal.includes('week b')) {
+        weekType = 'B';
+      }
+    }
+
+    // Get employee name
+    const employeeName = employeeColIdx >= 0 ? cells[employeeColIdx]?.trim() : cells[0]?.trim();
+    if (!employeeName) continue;
+
+    // Find matching profile
+    const matchedProfile = profiles.find(p =>
+      p.name.toLowerCase() === employeeName.toLowerCase() ||
+      p.name.toLowerCase().includes(employeeName.toLowerCase()) ||
+      employeeName.toLowerCase().includes(p.name.toLowerCase())
+    );
+
+    // Parse each day's shift
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+      const colIdx = dayColIndices[dayIdx];
+      if (colIdx < 0 || colIdx >= cells.length) continue;
+
+      const cellValue = cells[colIdx]?.trim() || '';
+      const shiftDate = weekDates[dayIdx];
+
+      const parsed = parseTimeRange(cellValue, shiftTypeSettings);
+      if (!parsed) continue;
+
+      const shift: ParsedShift = {
+        employeeName,
+        employeeId: matchedProfile?.id,
+        day: dayColumns[dayIdx],
+        shiftDate,
+        startTime: parsed.start,
+        endTime: parsed.end,
+        roleLabel: shiftTypeSettings.some(s => s.name.toLowerCase() === cellValue.toLowerCase()) ? cellValue : '',
+        isOvernight: parsed.isOvernight,
+        isNoShift: false,
+      };
+
+      shifts.push(shift);
+
+      if (!matchedProfile) {
+        if (!unmatchedNames.includes(employeeName)) {
+          unmatchedNames.push(employeeName);
+        }
+        unmatchedShifts.push(shift);
+      }
+    }
+  }
+
+  // If week type not found in data rows, try to find in first few lines
+  if (weekType === 'Unknown') {
+    for (let i = 0; i < Math.min(5, lines.length); i++) {
+      const line = lines[i].toLowerCase();
+      if (line.includes('week a')) {
+        weekType = 'A';
+        break;
+      } else if (line.includes('week b')) {
+        weekType = 'B';
+        break;
+      }
+    }
+  }
+
+  return {
+    weekType,
+    weekStartDate: weekDates[0],
+    shifts,
+    unmatchedNames,
+    unmatchedShifts,
+  };
+}
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  result.push(current.trim());
+  return result;
+}
+
 export async function extractTextFromPdf(fileData: string): Promise<string> {
   // Convert base64 data URL to binary
   const base64Data = fileData.split(',')[1] || fileData;

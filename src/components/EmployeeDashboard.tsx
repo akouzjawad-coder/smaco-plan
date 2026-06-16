@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, Clock, FileText, Download, X, Maximize2 } from 'lucide-react';
+import { Plus, Calendar, Clock, FileText, Download, X, Maximize2, FileSpreadsheet } from 'lucide-react';
 import { Profile, WorkRecord, Shift, ShiftPlan } from '../types';
 import { formatCurrency, formatHoursDecimal, formatHumanDate, calculateWorkHours } from '../utils';
 
@@ -159,29 +159,50 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
           <p className="text-[10px] text-slate-400">All staff shifts this week</p>
         </div>
 
-        {/* PDF Shift Plan Viewer */}
+        {/* Shift Plan Viewer (PDF or CSV) */}
         {shiftPlans.length > 0 && (
           <div className="border-b border-zinc-800">
             <div className="p-3 bg-orange-950/20">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-orange-400" />
-                  <span className="text-xs font-bold text-white">Shift Plan PDF</span>
+                  {shiftPlans[0].file_name.endsWith('.csv') ? (
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-orange-400" />
+                  )}
+                  <span className="text-xs font-bold text-white">Shift Plan</span>
                 </div>
-                <button
-                  onClick={() => setViewingPdf(shiftPlans[0])}
-                  className="text-[10px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <Maximize2 className="w-3 h-3" /> Full View
-                </button>
+                {shiftPlans[0].file_name.endsWith('.csv') ? (
+                  <a
+                    href={shiftPlans[0].file_data}
+                    download={shiftPlans[0].file_name}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Download className="w-3 h-3" /> CSV
+                  </a>
+                ) : (
+                  <button
+                    onClick={() => setViewingPdf(shiftPlans[0])}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-orange-600 hover:bg-orange-700 text-white transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Maximize2 className="w-3 h-3" /> Full View
+                  </button>
+                )}
               </div>
-              <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
-                <iframe
-                  src={shiftPlans[0].file_data}
-                  className="w-full h-48"
-                  title="Shift Plan PDF"
-                />
-              </div>
+              {shiftPlans[0].file_name.endsWith('.csv') ? (
+                <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900 p-3">
+                  <p className="text-[10px] text-emerald-400 mb-2">CSV Schedule Imported</p>
+                  <p className="text-[9px] text-zinc-500">See the full weekly schedule below.</p>
+                </div>
+              ) : (
+                <div className="rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900">
+                  <iframe
+                    src={shiftPlans[0].file_data}
+                    className="w-full h-48"
+                    title="Shift Plan PDF"
+                  />
+                </div>
+              )}
               <p className="text-[9px] text-zinc-500 mt-1.5 text-center">
                 {shiftPlans[0].file_name} · Uploaded {new Date(shiftPlans[0].created_at).toLocaleDateString()}
               </p>
@@ -399,7 +420,11 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-sm flex flex-col z-50">
           <div className="flex items-center justify-between p-4 border-b border-zinc-800 bg-slate-900">
             <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-orange-400" />
+              {viewingPdf.file_name.endsWith('.csv') ? (
+                <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <FileText className="w-5 h-5 text-orange-400" />
+              )}
               <span className="text-sm font-bold text-white">{viewingPdf.file_name}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -419,11 +444,19 @@ export default function EmployeeDashboard({ currentUser, workRecords, shifts, sh
             </div>
           </div>
           <div className="flex-1 p-4 overflow-hidden">
-            <iframe
-              src={viewingPdf.file_data}
-              className="w-full h-full rounded-xl border border-zinc-800"
-              title="Shift Plan PDF"
-            />
+            {viewingPdf.file_name.endsWith('.csv') ? (
+              <div className="w-full h-full rounded-xl border border-zinc-800 bg-slate-900 p-4 overflow-auto">
+                <pre className="text-xs text-zinc-300 font-mono whitespace-pre">
+                  {decodeURIComponent(escape(atob(viewingPdf.file_data.split(',')[1] || '')))}
+                </pre>
+              </div>
+            ) : (
+              <iframe
+                src={viewingPdf.file_data}
+                className="w-full h-full rounded-xl border border-zinc-800"
+                title="Shift Plan PDF"
+              />
+            )}
           </div>
         </div>
       )}
